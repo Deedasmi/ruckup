@@ -1,0 +1,7 @@
+[package]
+name = "ruckup"
+version = "0.0.0"
+authors = ["Richard Petrie <rap1011@ksu.edu>"]
+
+[dependencies]
+rust_sodium = "0.1.2"
