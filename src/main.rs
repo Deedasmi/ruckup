@@ -3,23 +3,22 @@ use rust_sodium::crypto::secretbox;
 use std::io::prelude::*;
 use std::fs::File;
 
-fn main() {
-    test_encrypt();
-    test_decrypt();
+#[allow(dead_code)]
+static CHUNK_SIZE: i64 = 4096000;
 
+fn main() {
+    test_encrypt("test_file/11mb.txt");
+    test_decrypt();
 }
 
-fn test_encrypt() {
+fn test_encrypt(filename: &str) {
     let key = secretbox::gen_key();
     write_data(&key[..], "key.txt");
     let nonce = secretbox::gen_nonce();
     write_data(&nonce[..], "nonce.txt");
-    let plaintext = b"some data";
-    let ciphertext = secretbox::seal(plaintext, &nonce, &key);
+    let plaintext = read_data(filename);
+    let ciphertext = secretbox::seal(&plaintext[..], &nonce, &key);
     write_data(&ciphertext[..], "cipher.txt");
-    
-    //let tp = String::from_utf8(their_plaintext).unwrap();
-    //println!("p: {:?} n: {:?} c: {:?} tp: {}", plaintext, nonce, ciphertext, tp);
 }
 
 fn test_decrypt() {
@@ -29,7 +28,8 @@ fn test_decrypt() {
     let nonce = secretbox::Nonce::from_slice(&n[..]);
     let ciphertext = read_data("cipher.txt");
     let their_plaintext = secretbox::open(&ciphertext, &nonce.unwrap(), &key.unwrap()).unwrap();
-    println!("{}", String::from_utf8(their_plaintext).unwrap());
+    
+    write_data(&their_plaintext[..], "output.txt");
 }
 
 fn read_data(filename: &str) -> Vec<u8> {
@@ -42,4 +42,13 @@ fn read_data(filename: &str) -> Vec<u8> {
 fn write_data(data: &[u8], filename: &str) {
     let mut f = File::create(filename).unwrap();
     f.write_all(data).unwrap();
+}
+
+#[test]
+fn p_d_same() {
+    let p = read_data("test_file/11mb.txt");
+    test_encrypt("test_file/11mb.txt");
+    test_decrypt();
+    let d = read_data("output.txt");
+    assert!(p==d);
 }
