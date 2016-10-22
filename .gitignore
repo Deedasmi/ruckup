@@ -1,3 +1,6 @@
 target
 Cargo.lock
 key.txt
+cipher.txt
+nonce.txt
+output.txt
