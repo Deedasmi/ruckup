@@ -9,6 +9,7 @@ Ruckup is a server/client backup system written in Rust as my senior project at 
 ## TODO
 
 * Clean up test code
+* Better documentation
 * Standerdize API
 * Build meta-data table
 * Basic server code

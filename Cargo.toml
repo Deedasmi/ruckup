@@ -3,5 +3,13 @@ name = "ruckup"
 version = "0.0.0"
 authors = ["Richard Petrie <rap1011@ksu.edu>"]
 
+[lib]
+name = "lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ruckup"
+path = "src/bin.rs"
+
 [dependencies]
 rust_sodium = "0.1.2"

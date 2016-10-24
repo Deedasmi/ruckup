@@ -1,3 +1,5 @@
+//! General library for use in libsodium
+//! Will likely be broken out to multiple modules later
 extern crate rust_sodium;
 use rust_sodium::crypto::secretbox;
 use std::io::prelude::*;
@@ -7,67 +9,85 @@ use std::fs::OpenOptions;
 use std::fs::metadata;
 use std::fs::remove_file;
 
-#[allow(dead_code)]
 const CHUNK_SIZE: u64 = 4096000;
 const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
 
-fn main() {
-    match remove_file("cipher.txt") {
+/// Encrypts a file with a given key, writing output to new file
+///
+/// # Remarkes
+/// Subject to changes. Known TODOs:
+///
+/// * Instead of saving to file, take in an mpsc queue and place ciphertext there
+/// * Instead of taking a file name, take a proper Path object or file pointer
+pub fn encrypt(key: &secretbox::Key, src_filename: &str, dest_filename: &str) -> secretbox::Nonce {
+    // Find a better way to do this
+    match remove_file(dest_filename) {
         _ => (),
     };
-    match remove_file("output.txt") {
-        _ => (),
-    };
-    let key = secretbox::gen_key();
-    println!("Encrypting file");
-    let nonce = test_encrypt(&key, "test_file/11mb.txt");
-    println!("Decrypting file");
-    test_decrypt(key, nonce);
-}
 
-fn test_encrypt(key: &secretbox::Key, filename: &str) -> secretbox::Nonce {
     // Get nonce
     let nonce = secretbox::gen_nonce();
 
     // Get file size
     let mut r: u64 = 0;
-    let fs = get_file_size(filename);
+    let fs = get_file_size(src_filename);
 
 
     // Get plaintext and encrypt
     while r * CHUNK_SIZE < fs {
-        let plaintext = read_data(filename, r * CHUNK_SIZE, CHUNK_SIZE);
+        let plaintext = read_data(src_filename, r * CHUNK_SIZE, CHUNK_SIZE);
         let ciphertext = secretbox::seal(&plaintext[..], &nonce, key);
         // Write cipher size instead of plaintext size
-        write_data(&ciphertext, "cipher.txt");
+        write_data(&ciphertext, dest_filename);
         r += 1;
     }
     nonce
 }
 
-fn test_decrypt(key: secretbox::Key, nonce: secretbox::Nonce) {
+/// Decrypts a given file with a given nonce and key
+///
+/// # Remarks
+/// Subject to changes. Known TODOs:
+///
+/// * Instead of reading from file, 'stream' from buffer.
+/// * Instead of taking a file name, take a proper Path object or file pointer
+pub fn decrypt(key: secretbox::Key,
+               nonce: secretbox::Nonce,
+               src_filename: &str,
+               dest_filename: &str) {
+
+    // Find a better way to do this
+    match remove_file(dest_filename) {
+        _ => (),
+    };
+
     // Get file size
     let mut r = 0;
-    let fs = get_file_size("cipher.txt");
+    let fs = get_file_size(src_filename);
 
     while r * CIPHER_SIZE < fs {
-        let ciphertext = read_data("cipher.txt", CIPHER_SIZE * r, CIPHER_SIZE);
+        let ciphertext = read_data(src_filename, CIPHER_SIZE * r, CIPHER_SIZE);
         let their_plaintext = match secretbox::open(&ciphertext, &nonce, &key) {
             Ok(val) => val,
             Err(err) => {
                 panic!("Error! {:?}", err);
             }
         };
-        write_data(&their_plaintext[..], "output.txt");
+        write_data(&their_plaintext[..], dest_filename);
         r += 1;
     }
 }
 
+/// Helper function to find size of file.
 fn get_file_size(filename: &str) -> u64 {
     let m = metadata(filename).unwrap();
     m.len()
 }
 
+/// Helper function to read chunks from a file
+///
+/// TODO:
+/// * Safely handle file operations
 fn read_data(filename: &str, offset: u64, limit: u64) -> Vec<u8> {
     let mut f = File::open(filename).unwrap();
     f.seek(SeekFrom::Start(offset)).unwrap();
@@ -83,6 +103,11 @@ fn read_data(filename: &str, offset: u64, limit: u64) -> Vec<u8> {
     buf
 }
 
+/// Helper function to append data to a file
+///
+/// TODO:
+/// * Chunk files for mid-file resumption
+/// * Safely handle file writing
 fn write_data(data: &[u8], filename: &str) {
     let mut f = OpenOptions::new()
         .append(true)
@@ -94,17 +119,11 @@ fn write_data(data: &[u8], filename: &str) {
 
 #[test]
 fn p_d_same() {
-    match remove_file("cipher.txt") {
-        _ => (),
-    };
-    match remove_file("output.txt") {
-        _ => (),
-    };
     let fs = get_file_size("test_file/11mb.txt");
     let key = secretbox::gen_key();
     let p = read_data("test_file/11mb.txt", 0, fs);
-    let nonce = test_encrypt(&key, "test_file/11mb.txt");
-    test_decrypt(key, nonce);
+    let nonce = encrypt(&key, "test_file/11mb.txt", "cipher.txt");
+    decrypt(key, nonce, "cipher.txt", "output.txt");
     let d = read_data("output.txt", 0, fs);
-    assert!(p == d);
+    assert_eq!(p, d);
 }
