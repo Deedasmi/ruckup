@@ -13,3 +13,5 @@ path = "src/bin.rs"
 
 [dependencies]
 rust_sodium = "0.1.2"
+rustc-serialize = "0.3"
+preferences = "0.7.2"
