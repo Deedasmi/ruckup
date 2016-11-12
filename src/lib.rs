@@ -1,13 +1,14 @@
 //! General library for use in libsodium
 //! Will likely be broken out to multiple modules later
 extern crate rust_sodium;
+extern crate rustc_serialize;
+extern crate chrono;
 use rust_sodium::crypto::secretbox;
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::fs::metadata;
-use std::fs::remove_file;
+use std::fs::{File, OpenOptions, metadata, remove_file};
+use std::hash::{Hash, Hasher};
+use chrono::{DateTime, Local};
 
 const CHUNK_SIZE: u64 = 4096000;
 const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
@@ -115,6 +116,21 @@ fn write_data(data: &[u8], filename: &str) {
         .open(filename)
         .unwrap();
     f.write_all(data).unwrap();
+}
+
+#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq)]
+struct FileRecord {
+    src: String,
+    dst: String,
+    last_modified: DateTime<Local>,
+    is_file: bool,
+    enc_hash: Option<String>,
+}
+
+impl Hash for FileRecord {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.src.hash(state);
+    }
 }
 
 #[test]

@@ -17,3 +17,4 @@ rustc-serialize = "0.3"
 preferences = "0.7.2"
 app_dirs = "^1.1.1"
 clap = {version = "2.18", features = ["yaml"]}
+chrono = { version = "0.2", features = ["rustc-serialize"] }

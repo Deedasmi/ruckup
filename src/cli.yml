@@ -14,3 +14,7 @@ args:
         value_name: source_location
         help: Adds a new location to be backed up
         takes_value: true
+    - verbose:
+        short: v
+        multiple: true
+        help: Set level of verbosity
