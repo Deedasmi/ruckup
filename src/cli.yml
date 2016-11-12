@@ -1,0 +1,16 @@
+name: ruckup
+author: Richard P. <rap1011@ksu.edu>
+about: Stupid backup system
+args:
+    - temporary_storage:
+        short: t
+        long: temp_store
+        value_name: temp_store
+        help: Sets the temporary_value location
+        takes_value: true
+    - src_loc:
+        short: s
+        long: src_loc
+        value_name: source_location
+        help: Adds a new location to be backed up
+        takes_value: true

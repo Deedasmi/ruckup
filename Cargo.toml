@@ -15,3 +15,5 @@ path = "src/bin.rs"
 rust_sodium = "0.1.2"
 rustc-serialize = "0.3"
 preferences = "0.7.2"
+app_dirs = "^1.1.1"
+clap = {version = "2.18", features = ["yaml"]}
