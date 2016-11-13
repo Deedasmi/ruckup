@@ -122,6 +122,8 @@ fn write_data(data: &[u8], filename: &str) {
     f.write_all(data).unwrap();
 }
 
+/// Converts a Vector of directories into a vector of all files and folders in those directories
+/// Will only return one entry per file.
 pub fn get_file_vector(src_locs: Vec<PathBuf>) -> Vec<DirEntry> {
     // TODO do this better
     let mut direntrys: Vec<DirHash> = Vec::new();
@@ -140,8 +142,15 @@ pub fn get_file_vector(src_locs: Vec<PathBuf>) -> Vec<DirEntry> {
 
 }
 
+/// Struct for recording files that are walked into a serilazable format
+/// # Example
+/// ```
+/// use rustc_serialize::json;
+/// let fr = FileRecord::new("11mb.txt");
+/// json::decode(&fr).unwrap();
+///
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq)]
-struct FileRecord {
+pub struct FileRecord {
     src: PathBuf,
     dst: PathBuf,
     last_modified: u64,
@@ -157,23 +166,25 @@ impl Hash for FileRecord {
 
 #[allow(dead_code)]
 impl FileRecord {
-    fn new(file: PathBuf, dst: PathBuf) -> FileRecord {
-        let md = metadata(&file).unwrap();
-        let t = md.modified()
+    fn new(file: DirEntry, dst: PathBuf) -> FileRecord {
+        let t = file.metadata()
+            .unwrap()
+            .modified()
             .unwrap()
             .duration_since(UNIX_EPOCH)
             .map(|x| x.as_secs())
             .unwrap();
         FileRecord {
-            src: file,
+            src: file.path().to_path_buf(),
             dst: dst,
             last_modified: t,
-            is_file: md.is_file(),
+            is_file: file.metadata().unwrap().is_file(),
             enc_hash: None,
         }
     }
 }
 
+/// This is a really dumb struct to make DirEntry hashable
 #[derive(Clone)]
 struct DirHash {
     dir: DirEntry,
