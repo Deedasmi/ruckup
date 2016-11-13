@@ -123,6 +123,7 @@ fn write_data(data: &[u8], filename: &str) {
 }
 
 /// Converts a Vector of directories into a vector of all files and folders in those directories
+/// # Note
 /// Will only return one entry per file.
 pub fn get_file_vector(src_locs: Vec<PathBuf>) -> Vec<DirEntry> {
     // TODO do this better
@@ -133,13 +134,8 @@ pub fn get_file_vector(src_locs: Vec<PathBuf>) -> Vec<DirEntry> {
             direntrys.push(DirHash::new(f.unwrap()));
         }
     }
-    let shittyfuckshit: Vec<DirHash> = direntrys.into_iter().unique().collect();
-    let mut things: Vec<DirEntry> = Vec::new();
-    for d in shittyfuckshit.into_iter() {
-        things.push(d.dir);
-    }
-    things
-
+    let hashable_dirs: Vec<DirHash> = direntrys.into_iter().unique().collect();
+    hashable_dirs.into_iter().map(|x| x.dir).collect()
 }
 
 /// Struct for recording files that are walked into a serilazable format
