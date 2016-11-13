@@ -5,3 +5,4 @@ cipher.txt
 nonce.txt
 output.txt
 .vscode/
+log/

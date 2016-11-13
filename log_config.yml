@@ -1,0 +1,19 @@
+refresh_rate: 30 seconds
+appenders:
+  stdout:
+    kind: console
+  lib:
+    kind: file
+    path: "log/lib.log"
+    encoder:
+      pattern: "{d} - {m}{n}"
+root:
+  level: warn
+  appenders:
+    - stdout
+loggers:
+  app::lib:
+    level: info
+    appenders:
+      - lib
+    additive: false
