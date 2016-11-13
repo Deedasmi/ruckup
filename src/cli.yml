@@ -1,4 +1,5 @@
 name: ruckup
+version: "0.0"
 author: Richard P. <rap1011@ksu.edu>
 about: Stupid backup system
 args:
