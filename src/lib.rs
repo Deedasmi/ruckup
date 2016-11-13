@@ -2,13 +2,13 @@
 //! Will likely be broken out to multiple modules later
 extern crate rust_sodium;
 extern crate rustc_serialize;
-extern crate chrono;
 use rust_sodium::crypto::secretbox;
 use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::fs::{File, OpenOptions, metadata, remove_file};
 use std::hash::{Hash, Hasher};
-use chrono::{DateTime, Local};
+use std::path::PathBuf;
+use std::time::UNIX_EPOCH;
 
 const CHUNK_SIZE: u64 = 4096000;
 const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
@@ -120,9 +120,9 @@ fn write_data(data: &[u8], filename: &str) {
 
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq)]
 struct FileRecord {
-    src: String,
-    dst: String,
-    last_modified: DateTime<Local>,
+    src: PathBuf,
+    dst: PathBuf,
+    last_modified: u64,
     is_file: bool,
     enc_hash: Option<String>,
 }
@@ -130,6 +130,24 @@ struct FileRecord {
 impl Hash for FileRecord {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.src.hash(state);
+    }
+}
+
+impl FileRecord {
+    fn new(file: PathBuf, dst: PathBuf) -> FileRecord {
+        let md = metadata(&file).unwrap();
+        let t = md.modified()
+            .unwrap()
+            .duration_since(UNIX_EPOCH)
+            .map(|x| x.as_secs())
+            .unwrap();
+        FileRecord {
+            src: file,
+            dst: dst,
+            last_modified: t,
+            is_file: md.is_file(),
+            enc_hash: None,
+        }
     }
 }
 
