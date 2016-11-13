@@ -2,6 +2,7 @@ extern crate rust_sodium;
 extern crate preferences;
 extern crate rustc_serialize;
 extern crate app_dirs;
+extern crate lib;
 #[macro_use]
 extern crate clap;
 use preferences::{AppInfo, PreferencesMap, Preferences};
@@ -10,7 +11,6 @@ use rustc_serialize::json;
 use clap::App;
 use app_dirs::{app_dir, AppDataType};
 use std::path::PathBuf;
-
 
 const PREFLOC: &'static str = "preferences/ruckup";
 const APP_INFO: AppInfo = AppInfo {
@@ -51,7 +51,6 @@ fn main() {
         println!("Found key {:?}", key);
     }
 
-
     // Load src folders
     let mut src_locs: Vec<PathBuf> =
         prefmap.get("src_locs".into()).and_then(|x| json::decode(x).ok()).unwrap_or_else(|| {
@@ -84,6 +83,8 @@ fn main() {
     // println!("Source locations: {:?}", t);
 
     // Build walkdir iterator
+    let all_files = lib::get_file_vector(src_locs);
+    println!("{:?}", all_files);
 
     // Load storage location
     let temp_store: String = prefmap.get("temp_store".into())

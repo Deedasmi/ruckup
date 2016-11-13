@@ -2,6 +2,8 @@
 //! Will likely be broken out to multiple modules later
 extern crate rust_sodium;
 extern crate rustc_serialize;
+extern crate walkdir;
+extern crate itertools;
 use rust_sodium::crypto::secretbox;
 use std::io::prelude::*;
 use std::io::SeekFrom;
@@ -9,6 +11,8 @@ use std::fs::{File, OpenOptions, metadata, remove_file};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
+use walkdir::{WalkDir, DirEntry};
+use itertools::Itertools;
 
 const CHUNK_SIZE: u64 = 4096000;
 const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
@@ -118,6 +122,24 @@ fn write_data(data: &[u8], filename: &str) {
     f.write_all(data).unwrap();
 }
 
+pub fn get_file_vector(src_locs: Vec<PathBuf>) -> Vec<DirEntry> {
+    // TODO do this better
+    let mut direntrys: Vec<DirHash> = Vec::new();
+    for loc in src_locs.into_iter() {
+        let i = WalkDir::new(loc).into_iter();
+        for f in i {
+            direntrys.push(DirHash::new(f.unwrap()));
+        }
+    }
+    let shittyfuckshit: Vec<DirHash> = direntrys.into_iter().unique().collect();
+    let mut things: Vec<DirEntry> = Vec::new();
+    for d in shittyfuckshit.into_iter() {
+        things.push(d.dir);
+    }
+    things
+
+}
+
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq)]
 struct FileRecord {
     src: PathBuf,
@@ -133,6 +155,7 @@ impl Hash for FileRecord {
     }
 }
 
+#[allow(dead_code)]
 impl FileRecord {
     fn new(file: PathBuf, dst: PathBuf) -> FileRecord {
         let md = metadata(&file).unwrap();
@@ -148,6 +171,31 @@ impl FileRecord {
             is_file: md.is_file(),
             enc_hash: None,
         }
+    }
+}
+
+#[derive(Clone)]
+struct DirHash {
+    dir: DirEntry,
+}
+
+impl DirHash {
+    fn new(d: DirEntry) -> DirHash {
+        DirHash { dir: d }
+    }
+}
+
+impl Hash for DirHash {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.dir.path().hash(state);
+    }
+}
+
+impl Eq for DirHash {}
+
+impl PartialEq for DirHash {
+    fn eq(&self, other: &DirHash) -> bool {
+        self.dir.path() == other.dir.path()
     }
 }
 
