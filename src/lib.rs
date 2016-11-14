@@ -4,6 +4,8 @@ extern crate rust_sodium;
 extern crate rustc_serialize;
 extern crate walkdir;
 extern crate itertools;
+#[macro_use]
+extern crate log;
 use rust_sodium::crypto::secretbox;
 use std::io::prelude::*;
 use std::io::SeekFrom;
@@ -22,13 +24,13 @@ const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
 /// # Remarkes
 /// Subject to changes. Known TODOs:
 ///
-/// * Instead of saving to file, take in an mpsc queue and place ciphertext there
 /// * Instead of taking a file name, take a proper Path object or file pointer
-pub fn encrypt(key: &secretbox::Key, src_filename: &str, dest_filename: &str) -> secretbox::Nonce {
-    // Find a better way to do this
-    match remove_file(dest_filename) {
-        _ => (),
-    };
+pub fn encrypt_f2f(key: &secretbox::Key,
+                   src_filename: &str,
+                   dest_filename: &str)
+                   -> secretbox::Nonce {
+
+    remove_file(dest_filename).ok();
 
     // Get nonce
     let nonce = secretbox::gen_nonce();
@@ -41,7 +43,7 @@ pub fn encrypt(key: &secretbox::Key, src_filename: &str, dest_filename: &str) ->
     // Get plaintext and encrypt
     while r * CHUNK_SIZE < fs {
         let plaintext = read_data(src_filename, r * CHUNK_SIZE, CHUNK_SIZE);
-        let ciphertext = secretbox::seal(&plaintext[..], &nonce, key);
+        let ciphertext = encrypt(&plaintext[..], &nonce, &key);
         // Write cipher size instead of plaintext size
         write_data(&ciphertext, dest_filename);
         r += 1;
@@ -49,22 +51,20 @@ pub fn encrypt(key: &secretbox::Key, src_filename: &str, dest_filename: &str) ->
     nonce
 }
 
-/// Decrypts a given file with a given nonce and key
+/// Decrypts a given file with a given nonce and key, and saves that to a file
 ///
 /// # Remarks
 /// Subject to changes. Known TODOs:
 ///
 /// * Instead of reading from file, 'stream' from buffer.
 /// * Instead of taking a file name, take a proper Path object or file pointer
-pub fn decrypt(key: secretbox::Key,
-               nonce: secretbox::Nonce,
-               src_filename: &str,
-               dest_filename: &str) {
+pub fn decrypt_f2f(key: &secretbox::Key,
+                   nonce: secretbox::Nonce,
+                   src_filename: &str,
+                   dest_filename: &str) {
 
     // Find a better way to do this
-    match remove_file(dest_filename) {
-        _ => (),
-    };
+    remove_file(dest_filename).ok();
 
     // Get file size
     let mut r = 0;
@@ -72,21 +72,34 @@ pub fn decrypt(key: secretbox::Key,
 
     while r * CIPHER_SIZE < fs {
         let ciphertext = read_data(src_filename, CIPHER_SIZE * r, CIPHER_SIZE);
-        let their_plaintext = match secretbox::open(&ciphertext, &nonce, &key) {
-            Ok(val) => val,
-            Err(err) => {
-                panic!("Error! {:?}", err);
-            }
-        };
+        let their_plaintext = decrypt(&ciphertext[..], &nonce, &key);
         write_data(&their_plaintext[..], dest_filename);
         r += 1;
     }
 }
 
+/// Basic wrapper for encryption
+pub fn encrypt(plaintext: &[u8], nonce: &secretbox::Nonce, key: &secretbox::Key) -> Vec<u8> {
+    let cipher = secretbox::seal(plaintext, nonce, key);
+    cipher
+}
+
+/// Basic wrapper for decyption.
+///
+/// # Error
+/// Panics if the decryption fails
+///
+/// # Remarks
+/// Subject to change
+pub fn decrypt(ciphertext: &[u8], nonce: &secretbox::Nonce, key: &secretbox::Key) -> Vec<u8> {
+    secretbox::open(&ciphertext, &nonce, &key).expect("Decryption failed!")
+}
+
 /// Helper function to find size of file.
 fn get_file_size(filename: &str) -> u64 {
-    let m = metadata(filename).unwrap();
-    m.len()
+    metadata(filename)
+        .map(|x| x.len())
+        .expect(&format!("Getting file size failed! Filename: {}", filename))
 }
 
 /// Helper function to read chunks from a file
@@ -99,7 +112,7 @@ fn read_data(filename: &str, offset: u64, limit: u64) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     match f.take(limit).read_to_end(&mut buf) {
         Ok(val) => {
-            println!("Successfully read {} bytes. Expexted {}", val, limit);
+            debug!(target: "lib", "Successfully read {} bytes. Expexted {}", val, limit);
         }
         Err(err) => {
             panic!("Error! {:?}", err);
@@ -127,6 +140,7 @@ fn write_data(data: &[u8], filename: &str) {
 /// Will only return one entry per file.
 pub fn get_file_vector(src_locs: Vec<PathBuf>) -> Vec<DirEntry> {
     // TODO do this better
+    debug!(target: "lib", "Getting file_vectors");
     let mut direntrys: Vec<DirHash> = Vec::new();
     for loc in src_locs.into_iter() {
         let i = WalkDir::new(loc).into_iter();
@@ -162,7 +176,8 @@ impl Hash for FileRecord {
 
 #[allow(dead_code)]
 impl FileRecord {
-    fn new(file: DirEntry, dst: PathBuf) -> FileRecord {
+    /// Generates a new FileRecord from a file and a destination path
+    pub fn new(file: DirEntry, dst: PathBuf) -> FileRecord {
         let t = file.metadata()
             .unwrap()
             .modified()
