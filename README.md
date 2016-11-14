@@ -10,23 +10,13 @@ Ruckup is a server/client backup system written in Rust as my senior project at 
 
 * Clean up test code
 * Configuation settings
-  * Key
-  * Temporary storage for full file encryption (hash)
-    * Optional?
-  * Chunk size
   * Cores
-  * Source locations
   * Server information
+* Export key
 * Figure out why nonce is wrong sometimes
 * Deal will filenames that are too long
 * Better documentation
 * Standerdize API
-* Build meta-data table
-  * Src file name
-  * Destination file name
-  * Nonce
-  * Detect changes (plaintext hash? Date modified?)
-  * Encypted hash (optional?)
 * Basic server code
 * File recovery code
 * Everything
