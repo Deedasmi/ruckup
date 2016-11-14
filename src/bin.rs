@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate lazy_static;
 extern crate rust_sodium;
 extern crate preferences;
 extern crate rustc_serialize;
@@ -8,6 +10,7 @@ extern crate log;
 extern crate log4rs;
 #[macro_use]
 extern crate clap;
+
 use preferences::{AppInfo, PreferencesMap, Preferences};
 use rust_sodium::crypto::secretbox;
 use rustc_serialize::json;
@@ -20,14 +23,16 @@ const APP_INFO: AppInfo = AppInfo {
     name: "ruckup",
     author: "ruckup",
 };
+lazy_static! {
+    static ref META_LOC: PathBuf  = app_dir(AppDataType::UserCache, &APP_INFO, "metadata/meta").unwrap();
+}
 
 #[allow(unused_variables)]
 fn main() {
     println!("Welcome to Ruckup! Loading settings...");
     log4rs::init_file("log_config.yml", Default::default()).unwrap();
     debug!("Logger loaded");
-    let meta_loc = app_dir(AppDataType::UserCache, &APP_INFO, "metadata/meta").unwrap();
-    debug!("Meta_loc set {:?}", meta_loc);
+    debug!("META_LOC set {:?}", *META_LOC);
 
 
     // Parse cli arguments
@@ -58,8 +63,8 @@ fn main() {
     let mut src_locs: Vec<PathBuf> =
         prefmap.get("src_locs".into()).and_then(|x| json::decode(x).ok()).unwrap_or_else(|| {
             warn!("No src locations found! Adding metadata table to backup locations.");
-            prefmap.insert("src_locs".into(), json::encode(&meta_loc).unwrap());
-            vec![meta_loc]
+            prefmap.insert("src_locs".into(), json::encode(&*META_LOC).unwrap());
+            vec![(*META_LOC).clone()]
         });
 
     println!("Settings loaded! Performing operations.");
