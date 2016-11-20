@@ -15,6 +15,10 @@ use rustc_serialize::json;
 use clap::App;
 use app_dirs::{app_dir, AppDataType};
 use std::path::PathBuf;
+use std::fs::create_dir_all;
+use std::collections::{HashMap, VecDeque};
+use std::fs::File;
+use std::io::Read;
 
 const PREFLOC: &'static str = "preferences/ruckup";
 const APP_INFO: AppInfo = AppInfo {
@@ -44,6 +48,7 @@ fn main() {
     // Load preferences
     let mut prefmap = PreferencesMap::<String>::load(&APP_INFO, &PREFLOC)
         .unwrap_or(PreferencesMap::<String>::new());
+
     // Load key
     debug!("Loading key");
 
@@ -92,17 +97,38 @@ fn main() {
 
     debug!("Source locations: {:?}", src_locs);
 
+    // Create hashmap
+    let mut dir_map = get_meta_data();
+
     // Build walkdir iterator
     let all_files = lib::get_file_vector(src_locs);
-    info!("{} files found", all_files.into_iter().count());
+    info!("{} files found", all_files.clone().into_iter().count());
 
     // Load storage location
     let temp_store: String = prefmap.get("temp_store".into())
         .and_then(|x| json::decode(x).ok())
         .expect("Need a temporary storage location! Set with ruckup -t <path>");
 
+    // Build encrypter iterator
+    for entry in all_files.into_iter() {
+        if entry.metadata().unwrap().is_file() {
+        } else {
+            create_dir_all(entry.path()).expect(&format!("Failed to create directory for {:?}", entry.path()));
+        }
+    }
+
     // Save preferences
     prefmap.save(&APP_INFO, &PREFLOC).expect("Failed to save preferences!");
     println!("Preferences saved! Goodbye!");
 
+}
+
+fn get_meta_data() -> HashMap<PathBuf, VecDeque<lib::FileRecord>> {
+    let mut v = Vec::new();
+    let d: HashMap<PathBuf, VecDeque<lib::FileRecord>> = match File::open(&*META_LOC) {
+        Ok(mut x) => { x.read_to_end(&mut v).expect("Failed on reading meta-data file");
+                json::decode(&String::from_utf8(v).unwrap()).unwrap() },
+        Err(_) => HashMap::new()
+    };
+    d
 }

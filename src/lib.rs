@@ -13,7 +13,7 @@ use std::fs::{File, OpenOptions, metadata, remove_file};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
-use walkdir::{WalkDir, DirEntry};
+pub use walkdir::{WalkDir, DirEntry};
 use itertools::Itertools;
 
 const CHUNK_SIZE: u64 = 4096000;
@@ -181,7 +181,7 @@ impl Hash for FileRecord {
 #[allow(dead_code)]
 impl FileRecord {
     /// Generates a new FileRecord from a file and a destination path
-    pub fn new(file: DirEntry, dst: PathBuf) -> FileRecord {
+    pub fn new(file: &DirEntry, dst: PathBuf) -> FileRecord {
         let t = file.metadata()
             .unwrap()
             .modified()
