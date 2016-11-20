@@ -33,7 +33,8 @@ pub fn encrypt_f2f(key: &secretbox::Key,
     remove_file(dest_filename).ok();
 
     // Get nonce
-    let nonce = secretbox::gen_nonce();
+    let mut nonce = secretbox::gen_nonce();
+    write_data(&nonce[..], dest_filename);
 
     // Get file size
     let mut r: u64 = 0;
@@ -42,11 +43,12 @@ pub fn encrypt_f2f(key: &secretbox::Key,
 
     // Get plaintext and encrypt
     while r * CHUNK_SIZE < fs {
-        let plaintext = read_data(src_filename, r * CHUNK_SIZE, CHUNK_SIZE);
+        let plaintext = read_data(src_filename, r * CHUNK_SIZE + secretbox::NONCEBYTES as u64, CHUNK_SIZE);
         let ciphertext = encrypt(&plaintext[..], &nonce, &key);
         // Write cipher size instead of plaintext size
         write_data(&ciphertext, dest_filename);
         r += 1;
+        nonce = nonce.increment_le();
     }
     nonce
 }
@@ -59,22 +61,24 @@ pub fn encrypt_f2f(key: &secretbox::Key,
 /// * Instead of reading from file, 'stream' from buffer.
 /// * Instead of taking a file name, take a proper Path object or file pointer
 pub fn decrypt_f2f(key: &secretbox::Key,
-                   nonce: secretbox::Nonce,
                    src_filename: &str,
                    dest_filename: &str) {
 
     // Find a better way to do this
     remove_file(dest_filename).ok();
 
+    let mut nonce = secretbox::Nonce::from_slice(&read_data(src_filename, 0, secretbox::NONCEBYTES as u64)[..]).expect(&format!("Bad nonce for {}", src_filename));
+
     // Get file size
     let mut r = 0;
     let fs = get_file_size(src_filename);
 
     while r * CIPHER_SIZE < fs {
-        let ciphertext = read_data(src_filename, CIPHER_SIZE * r, CIPHER_SIZE);
+        let ciphertext = read_data(src_filename, CIPHER_SIZE * r + secretbox::NONCEBYTES as u64, CIPHER_SIZE);
         let their_plaintext = decrypt(&ciphertext[..], &nonce, &key);
         write_data(&their_plaintext[..], dest_filename);
         r += 1;
+        nonce = nonce.increment_le();
     }
 }
 
