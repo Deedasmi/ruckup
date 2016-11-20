@@ -30,13 +30,13 @@ lazy_static! {
 #[allow(unused_variables)]
 fn main() {
     println!("Welcome to Ruckup! Loading settings...");
-    log4rs::init_file("log_config.yml", Default::default()).unwrap();
+    log4rs::init_file("src/config/log_config.yml", Default::default()).unwrap();
     debug!("Logger loaded");
     debug!("META_LOC set {:?}", *META_LOC);
 
 
     // Parse cli arguments
-    let yaml = load_yaml!("cli.yml");
+    let yaml = load_yaml!("config/cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
 
     // TODO Have this effect logging level
