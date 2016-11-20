@@ -74,14 +74,22 @@ fn main() {
         // TODO Verify path
         prefmap.insert("temp_store".into(), json::encode(&ts).unwrap());
         println!("Set temporary storage to {}", ts);
+        debug!("Set temporary storage to {}", ts);
     }
 
     // Parse -s
     if let Some(s) = matches.value_of("src_loc") {
         // TODO Verify path
+        let p = PathBuf::from(s);
+        if src_locs.contains(&p) {
+            println!("{} already in backup locations!", s);
+            debug!("{} already in backup locations!", s);
+        } else {
         src_locs.push(PathBuf::from(s));
         prefmap.insert("src_locs".into(), json::encode(&src_locs).unwrap());
         println!("Added {} to backup locations!", s);
+        debug!("Added {} to backup locations!", s);
+        }
     }
 
     debug!("Source locations: {:?}", src_locs);
