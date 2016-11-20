@@ -6,7 +6,7 @@ extern crate walkdir;
 extern crate itertools;
 #[macro_use]
 extern crate log;
-use rust_sodium::crypto::secretbox;
+pub use rust_sodium::crypto::secretbox;
 use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::fs::{File, OpenOptions, metadata, remove_file};

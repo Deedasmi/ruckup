@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate lazy_static;
-extern crate rust_sodium;
 extern crate preferences;
 extern crate rustc_serialize;
 extern crate app_dirs;
@@ -12,7 +11,6 @@ extern crate log4rs;
 extern crate clap;
 
 use preferences::{AppInfo, PreferencesMap, Preferences};
-use rust_sodium::crypto::secretbox;
 use rustc_serialize::json;
 use clap::App;
 use app_dirs::{app_dir, AppDataType};
@@ -49,11 +47,11 @@ fn main() {
     // Load key
     debug!("Loading key");
 
-    let key: secretbox::Key = prefmap.get("key".into())
+    let key: lib::secretbox::Key = prefmap.get("key".into())
         .and_then(|x| json::decode(x).ok())
         .unwrap_or_else(|| {
             warn!("No key found! Assumed intentional");
-            let k = secretbox::gen_key();
+            let k = lib::secretbox::gen_key();
             prefmap.insert("key".into(), json::encode(&k).unwrap());
             k
         });
