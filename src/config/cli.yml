@@ -22,3 +22,6 @@ args:
     - encrypt:
         short: e
         help: Runs a backup
+    - recover_all:
+        long: recover_all
+        help: Recovers all files

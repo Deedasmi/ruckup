@@ -16,6 +16,7 @@ use std::time::UNIX_EPOCH;
 pub use walkdir::{WalkDir, DirEntry};
 use itertools::Itertools;
 use std::collections::{HashMap, VecDeque};
+use std::collections::hash_map::Values;
 
 const CHUNK_SIZE: u64 = 4096000;
 const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
@@ -166,10 +167,9 @@ pub fn get_file_vector(src_locs: Vec<PathBuf>) -> Vec<DirEntry> {
 ///
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug)]
 pub struct FileRecord {
-    src: PathBuf,
-    dst: PathBuf,
-    last_modified: u64,
-    is_file: bool,
+    pub src: PathBuf,
+    pub dst: PathBuf,
+    pub last_modified: u64,
     enc_hash: Option<String>,
 }
 
@@ -225,6 +225,9 @@ impl MetaTable {
             None
         }
     }
+     pub fn values(&self) -> Values<String, VecDeque<FileRecord>> {
+        self.records.values()
+}
 }
 
 /// This is a really dumb struct to make DirEntry hashable

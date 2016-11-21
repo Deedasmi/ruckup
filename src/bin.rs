@@ -16,7 +16,7 @@ use app_dirs::{app_dir, AppDataType};
 use std::path::PathBuf;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::fs::create_dir_all;
+use std::fs::{remove_file, create_dir_all};
 
 const PREFLOC: &'static str = "preferences/ruckup";
 const APP_INFO: AppInfo = AppInfo {
@@ -135,6 +135,18 @@ fn main() {
     }
 
     
+// TEMP
+    remove_file("test_file/11mb.txt").ok();  
+    remove_file("test_file/11mbsha256").ok();
+
+    if matches.is_present("recover_all") {
+        for v in dir_map.values() {
+            for e in v.into_iter() {
+                info!("Decrypting {:?}", e.src);
+                lib::decrypt_f2f(&key, &e.dst, &e.src);
+            }
+        }
+}
 
     // Save meta data (TEMP)
     let mut f = File::create("test").unwrap();
