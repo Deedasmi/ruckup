@@ -19,3 +19,6 @@ args:
         short: v
         multiple: true
         help: Set level of verbosity
+    - encrypt:
+        short: e
+        help: Runs a backup

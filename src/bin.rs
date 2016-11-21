@@ -9,16 +9,14 @@ extern crate log;
 extern crate log4rs;
 #[macro_use]
 extern crate clap;
-
 use preferences::{AppInfo, PreferencesMap, Preferences};
 use rustc_serialize::json;
 use clap::App;
 use app_dirs::{app_dir, AppDataType};
 use std::path::PathBuf;
-use std::fs::create_dir_all;
-use std::collections::{HashMap, VecDeque};
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
+use std::fs::create_dir_all;
 
 const PREFLOC: &'static str = "preferences/ruckup";
 const APP_INFO: AppInfo = AppInfo {
@@ -72,6 +70,11 @@ fn main() {
 
     println!("Settings loaded! Performing operations.");
 
+    // Load file_num
+    let mut file_num: u64 = prefmap.get("file_num".into()).and_then(|x| json::decode(x).ok()).unwrap_or(0);
+    info!("Found file_num {}", &file_num);
+
+    // Argument parsing
     // Parse -ts
     if let Some(ts) = matches.value_of("temporary_storage") {
         // TODO Verify path
@@ -105,17 +108,37 @@ fn main() {
     info!("{} files found", all_files.clone().into_iter().count());
 
     // Load storage location
-    let temp_store: String = prefmap.get("temp_store".into())
-        .and_then(|x| json::decode(x).ok())
+    let temp_store: PathBuf = prefmap.get("temp_store".into())
+        .and_then(|x: &String| -> Option<String> {json::decode(&x).ok() })
+        .map(|x| PathBuf::from(x))
         .expect("Need a temporary storage location! Set with ruckup -t <path>");
 
-    // Build encrypter iterator
-    for entry in all_files.into_iter() {
-        if entry.metadata().unwrap().is_file() {
-        } else {
-            create_dir_all(entry.path()).expect(&format!("Failed to create directory for {:?}", entry.path()));
+    if matches.is_present("encrypt") {
+        println!("Running encryption!");
+        info!("Starting encryption!");
+        // Build encrypter iterator
+        for entry in all_files.into_iter() {
+            if entry.metadata().unwrap().is_file() {
+                let p = entry.path().to_path_buf();
+                let mut fp = temp_store.clone();
+                fp.push((file_num / 100000).to_string());
+                fp.push((file_num % 100000 / 1000).to_string());
+                create_dir_all(&fp).unwrap();
+                fp.push((file_num % 1000).to_string());
+                let c = dir_map.insert(&p.to_str().unwrap().to_owned(), &entry, fp.clone());
+                debug!("{:?} had {:?} before entry", &p, c);
+                let n = lib::encrypt_f2f(&key, &p, &fp);
+                file_num += 1;
+            }
         }
+        prefmap.insert("file_num".into(), json::encode(&file_num).unwrap());
     }
+
+    
+
+    // Save meta data (TEMP)
+    let mut f = File::create("test").unwrap();
+    f.write_all(&json::encode(&dir_map).expect("Failed to encode hashmap").as_bytes()).unwrap();
 
     // Save preferences
     prefmap.save(&APP_INFO, &PREFLOC).expect("Failed to save preferences!");
@@ -123,12 +146,12 @@ fn main() {
 
 }
 
-fn get_meta_data() -> HashMap<PathBuf, VecDeque<lib::FileRecord>> {
+fn get_meta_data() -> lib::MetaTable {
     let mut v = Vec::new();
-    let d: HashMap<PathBuf, VecDeque<lib::FileRecord>> = match File::open(&*META_LOC) {
+    let d: lib::MetaTable = match File::open(&*META_LOC) {
         Ok(mut x) => { x.read_to_end(&mut v).expect("Failed on reading meta-data file");
                 json::decode(&String::from_utf8(v).unwrap()).unwrap() },
-        Err(_) => HashMap::new()
+        Err(_) => lib::MetaTable::new()
     };
     d
 }
