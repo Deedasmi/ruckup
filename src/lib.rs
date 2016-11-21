@@ -45,7 +45,7 @@ pub fn encrypt_f2f(key: &secretbox::Key,
 
     // Get plaintext and encrypt
     while r * CHUNK_SIZE < fs {
-        let plaintext = read_data(src_filename, r * CHUNK_SIZE + secretbox::NONCEBYTES as u64, CHUNK_SIZE);
+        let plaintext = read_data(src_filename, r * CHUNK_SIZE, CHUNK_SIZE);
         let ciphertext = encrypt(&plaintext[..], &nonce, &key);
         // Write cipher size instead of plaintext size
         write_data(dest_filename, &ciphertext);
