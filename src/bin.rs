@@ -98,18 +98,21 @@ fn main() {
         println!("Added {} to backup locations!", s);
         debug!("Added {} to backup locations!", s);
         }
-    }
+    };
 
     debug!("Source locations: {:?}", src_locs);
-
-    // Create hashmap
-    let mut dir_map = get_meta_data();
 
     // Load storage location
     let temp_store: PathBuf = prefmap.get("temp_store".into())
         .and_then(|x: &String| -> Option<String> {json::decode(&x).ok() })
         .map(|x| PathBuf::from(x))
         .expect("Need a temporary storage location! Set with ruckup -t <path>");
+
+    // Create hashmap
+    let mut dir_map = match matches.is_present("no_recover_meta") || file_num == 0 {
+        true => get_meta_data(None),
+        false => get_meta_data(Some((&key, enc_file(&temp_store, file_num))))
+    };
 
     // Encrypt all src_locs into the temporary store
     if matches.is_present("encrypt") {
@@ -187,9 +190,12 @@ fn main() {
         println!("Recovered {} files in {} seconds", recovered, now.elapsed().unwrap().as_secs());
     }
 
-    // Save meta data (TEMP)
+    // Save meta data
     let mut f = File::create(&*META_LOC).expect("Failed to open meta_data for saving");
     f.write_all(&json::encode(&dir_map).expect("Failed to encode hashmap").as_bytes()).unwrap();
+    info!("Encrypting meta-data table...");
+    encrypt_f2f(&key, &*META_LOC, &enc_file(&temp_store, file_num));
+    info!("Encryption complete!");
 
     // Save preferences
     prefmap.save(&APP_INFO, &PREFLOC).expect("Failed to save preferences!");
@@ -198,12 +204,22 @@ fn main() {
 }
 
 /// Loads the meta-data table or creates a new one
-fn get_meta_data() -> MetaTable {
+fn get_meta_data(recover: Option<(&secretbox::Key, PathBuf)>) -> MetaTable {
     let mut v = Vec::new();
     let d: MetaTable = match File::open(&*META_LOC) {
         Ok(mut x) => { x.read_to_end(&mut v).expect("Failed on reading meta-data file");
                 json::decode(&String::from_utf8(v).unwrap()).unwrap() },
-        Err(_) => MetaTable::new()
+        Err(_) => { if let Some(tuple) = recover {
+                        warn!("Metadata table not found! Attempting to recover!");
+                        let (k, p) = tuple;
+                        let m = json::decode(&decrypt_f2s(&k, &p)).expect("Failed to recover metadata table!");
+                        info!("Metadata table successfully recovered!");
+                        m
+                    } else {
+                        info!("No metadata table found! Creating a new one");
+                        MetaTable::new()
+                    }
+        }
     };
     d
 }

@@ -84,6 +84,24 @@ pub fn decrypt_f2f(key: &secretbox::Key,
     }
 }
 
+/// Decrypts a given file with a given key into a string
+pub fn decrypt_f2s(key: &secretbox::Key, enc_filename: &PathBuf) -> String {
+    let mut nonce = secretbox::Nonce::from_slice(&read_data(enc_filename, 0, secretbox::NONCEBYTES as u64)[..]).expect(&format!("Bad nonce for {:?}", enc_filename));
+    let mut r = 0;
+    let fs = get_file_size(enc_filename);
+
+    let mut o: String = String::new();
+
+    while r * CIPHER_SIZE < fs - secretbox::NONCEBYTES as u64 {
+        let ciphertext = read_data(enc_filename, CIPHER_SIZE * r + secretbox::NONCEBYTES as u64, CIPHER_SIZE);
+        let their_plaintext = decrypt(&ciphertext[..], &nonce, &key);
+        o += &(String::from_utf8(their_plaintext).expect("Failed to convert plaintext to String!"));
+        r += 1;
+        nonce = nonce.increment_le();
+    }
+    o
+}
+
 /// Basic wrapper for encryption
 pub fn encrypt(plaintext: &[u8], nonce: &secretbox::Nonce, key: &secretbox::Key) -> Vec<u8> {
     let cipher = secretbox::seal(plaintext, nonce, key);
