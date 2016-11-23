@@ -13,8 +13,10 @@ use std::fs::{File, OpenOptions, metadata, remove_file};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
-use walkdir::{WalkDir, DirEntry};
+pub use walkdir::{WalkDir, DirEntry};
 use itertools::Itertools;
+use std::collections::{HashMap, VecDeque};
+use std::collections::hash_map::Values;
 
 const CHUNK_SIZE: u64 = 4096000;
 const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
@@ -26,15 +28,15 @@ const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
 ///
 /// * Instead of taking a file name, take a proper Path object or file pointer
 pub fn encrypt_f2f(key: &secretbox::Key,
-                   src_filename: &str,
-                   dest_filename: &str)
+                   src_filename: &PathBuf,
+                   dest_filename: &PathBuf)
                    -> secretbox::Nonce {
 
     remove_file(dest_filename).ok();
 
     // Get nonce
     let mut nonce = secretbox::gen_nonce();
-    write_data(&nonce[..], dest_filename);
+    write_data(dest_filename, &nonce[..]);
 
     // Get file size
     let mut r: u64 = 0;
@@ -43,10 +45,10 @@ pub fn encrypt_f2f(key: &secretbox::Key,
 
     // Get plaintext and encrypt
     while r * CHUNK_SIZE < fs {
-        let plaintext = read_data(src_filename, r * CHUNK_SIZE + secretbox::NONCEBYTES as u64, CHUNK_SIZE);
+        let plaintext = read_data(src_filename, r * CHUNK_SIZE, CHUNK_SIZE);
         let ciphertext = encrypt(&plaintext[..], &nonce, &key);
         // Write cipher size instead of plaintext size
-        write_data(&ciphertext, dest_filename);
+        write_data(dest_filename, &ciphertext);
         r += 1;
         nonce = nonce.increment_le();
     }
@@ -61,13 +63,13 @@ pub fn encrypt_f2f(key: &secretbox::Key,
 /// * Instead of reading from file, 'stream' from buffer.
 /// * Instead of taking a file name, take a proper Path object or file pointer
 pub fn decrypt_f2f(key: &secretbox::Key,
-                   src_filename: &str,
-                   dest_filename: &str) {
+                   src_filename: &PathBuf,
+                   dest_filename: &PathBuf) {
 
     // Find a better way to do this
     remove_file(dest_filename).ok();
 
-    let mut nonce = secretbox::Nonce::from_slice(&read_data(src_filename, 0, secretbox::NONCEBYTES as u64)[..]).expect(&format!("Bad nonce for {}", src_filename));
+    let mut nonce = secretbox::Nonce::from_slice(&read_data(src_filename, 0, secretbox::NONCEBYTES as u64)[..]).expect(&format!("Bad nonce for {:?}", src_filename));
 
     // Get file size
     let mut r = 0;
@@ -76,7 +78,7 @@ pub fn decrypt_f2f(key: &secretbox::Key,
     while r * CIPHER_SIZE < fs {
         let ciphertext = read_data(src_filename, CIPHER_SIZE * r + secretbox::NONCEBYTES as u64, CIPHER_SIZE);
         let their_plaintext = decrypt(&ciphertext[..], &nonce, &key);
-        write_data(&their_plaintext[..], dest_filename);
+        write_data(dest_filename, &their_plaintext[..]);
         r += 1;
         nonce = nonce.increment_le();
     }
@@ -100,17 +102,17 @@ pub fn decrypt(ciphertext: &[u8], nonce: &secretbox::Nonce, key: &secretbox::Key
 }
 
 /// Helper function to find size of file.
-fn get_file_size(filename: &str) -> u64 {
+fn get_file_size(filename: &PathBuf) -> u64 {
     metadata(filename)
         .map(|x| x.len())
-        .expect(&format!("Getting file size failed! Filename: {}", filename))
+        .expect(&format!("Getting file size failed! Filename: {:?}", filename))
 }
 
 /// Helper function to read chunks from a file
 ///
 /// TODO:
 /// * Safely handle file operations
-fn read_data(filename: &str, offset: u64, limit: u64) -> Vec<u8> {
+fn read_data(filename: &PathBuf, offset: u64, limit: u64) -> Vec<u8> {
     let mut f = File::open(filename).unwrap();
     f.seek(SeekFrom::Start(offset)).unwrap();
     let mut buf: Vec<u8> = Vec::new();
@@ -130,12 +132,12 @@ fn read_data(filename: &str, offset: u64, limit: u64) -> Vec<u8> {
 /// TODO:
 /// * Chunk files for mid-file resumption
 /// * Safely handle file writing
-fn write_data(data: &[u8], filename: &str) {
+fn write_data(filename: &PathBuf, data: &[u8]) {
     let mut f = OpenOptions::new()
         .append(true)
         .create(true)
         .open(filename)
-        .unwrap();
+        .expect(&format!("Failed to open or create file {:?}", filename));
     f.write_all(data).unwrap();
 }
 
@@ -163,12 +165,11 @@ pub fn get_file_vector(src_locs: Vec<PathBuf>) -> Vec<DirEntry> {
 /// let fr = FileRecord::new("11mb.txt");
 /// json::decode(&fr).unwrap();
 ///
-#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq)]
+#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug)]
 pub struct FileRecord {
-    src: PathBuf,
-    dst: PathBuf,
-    last_modified: u64,
-    is_file: bool,
+    pub src: PathBuf,
+    pub dst: PathBuf,
+    pub last_modified: u64,
     enc_hash: Option<String>,
 }
 
@@ -178,10 +179,9 @@ impl Hash for FileRecord {
     }
 }
 
-#[allow(dead_code)]
 impl FileRecord {
     /// Generates a new FileRecord from a file and a destination path
-    pub fn new(file: DirEntry, dst: PathBuf) -> FileRecord {
+    pub fn new(file: &DirEntry, dst: PathBuf) -> FileRecord {
         let t = file.metadata()
             .unwrap()
             .modified()
@@ -191,12 +191,43 @@ impl FileRecord {
             .unwrap();
         FileRecord {
             src: file.path().to_path_buf(),
-            dst: dst,
+            dst: dst.clone(),
             last_modified: t,
-            is_file: file.metadata().unwrap().is_file(),
             enc_hash: None,
         }
     }
+}
+
+#[derive(RustcDecodable, RustcEncodable)]
+pub struct MetaTable {
+    records: HashMap<String, VecDeque<FileRecord>>
+}
+
+impl MetaTable {
+    pub fn new() -> MetaTable {MetaTable{records: HashMap::new()}}
+    /// Inserts a record into the underlying HashMap
+    /// Returns the number of records BEFORE entry
+    pub fn insert(&mut self, k: &String, v: &DirEntry, dest: PathBuf) -> Option<usize> {
+        let nv = FileRecord::new(v, dest);
+        if self.records.contains_key(k) {
+            let c = self.records.get(k).unwrap().len();
+            if c == 3 {
+                let o = self.records.get_mut(k).unwrap().pop_front().unwrap();
+                debug!(target:"lib", "Dropped an old record for {:?}", o);
+            }
+            self.records.get_mut(k).unwrap().push_back(nv);
+            Some(self.records.get(k).unwrap().len())
+        } else {
+            debug!(target: "lib", "Creating new vector");
+            let mut vd:VecDeque<FileRecord> = VecDeque::with_capacity(3);
+            vd.push_front(nv);
+            self.records.insert(k.clone(), vd);
+            None
+        }
+    }
+     pub fn values(&self) -> Values<String, VecDeque<FileRecord>> {
+        self.records.values()
+}
 }
 
 /// This is a really dumb struct to make DirEntry hashable
