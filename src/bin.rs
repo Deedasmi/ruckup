@@ -155,8 +155,11 @@ fn main() {
         for e in dir_map.values().map(|x| x.back().unwrap()) {
             let mut loc = PathBuf::from(&loc);
             let mut c = e.src.components();
-            c.next();
-            c.next();
+            let p_or_r = c.next();
+            match p_or_r.unwrap() {
+                std::path::Component::Prefix(_) => { c.next(); },
+                _ => ()
+            }
             loc.push(c.as_path());
             restore_file(&key, &e.dst, &loc);
             debug!("Restored {:?} to {:?}", &e.src, loc);
