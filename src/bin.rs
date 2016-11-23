@@ -153,6 +153,30 @@ fn main() {
         }
         prefmap.insert("file_num".into(), json::encode(&file_num).unwrap());
         println!("Found {} folders and {} files. Encrypted {} files in {} seconds.", total_files as u64 - num_files, num_files, enc_files, now.elapsed().unwrap().as_secs()); 
+    if matches.is_present("scan") {
+        let now = SystemTime::now();
+        // Build walkdir iterator
+        let all_files = get_file_vector(&src_locs);
+        let total_files = all_files.clone().into_iter().count();
+        let mut need_backup: u64 = 0;
+        let mut num_files: u64 = 0;
+        debug!(target: "print", "{} files found", total_files);
+        for entry in all_files.into_iter() {
+            let md = entry.metadata().unwrap();
+            if md.is_file() {
+                num_files += 1;
+                let p =
+                    entry.path().to_str().expect("Unable to convert file_path to &str").to_owned();
+                if let Some(fr) = dir_map.get_latest_modified(&p) {
+                    if md.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs() != fr {
+                        need_backup += 1;
+                    }
+                } else {
+                    need_backup += 1;
+                }
+            }
+        }
+        info!(target: "print::imporant", "Found {} files, {} of which need backed up. Took {} seconds.", num_files, need_backup, now.elapsed().unwrap().as_secs());
     }
 
     if matches.is_present("recover_all") {

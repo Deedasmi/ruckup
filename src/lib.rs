@@ -160,11 +160,11 @@ fn write_data(filename: &PathBuf, data: &[u8]) {
 /// Converts a Vector of directories into a vector of all files and folders in those directories
 /// # Note
 /// Will only return one entry per file.
-pub fn get_file_vector(src_locs: Vec<PathBuf>) -> Vec<DirEntry> {
+pub fn get_file_vector(src_locs: &Vec<PathBuf>) -> Vec<DirEntry> {
     // TODO do this better
     debug!(target: "lib", "Getting file_vectors");
     let mut direntrys: Vec<DirHash> = Vec::new();
-    for loc in src_locs.into_iter() {
+    for loc in src_locs.clone().into_iter() {
         let i = WalkDir::new(loc).into_iter();
         for f in i {
             direntrys.push(DirHash::new(f.unwrap()));

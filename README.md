@@ -11,7 +11,7 @@ Ruckup is a server/client backup system written in Rust as my senior project at 
 ``` 
 git clone https://github.com/Deedasmi/ruckup.git && cd ruckup
 cargo run -- -h
-cargo run -- -t <TEMP_STORE> -s $(echo $(pwd)/"test_file") -e
+cargo run -- -t <TEMP_STORE> -b $(echo $(pwd)/"test_file") -e
 ```
 
 ## TODO

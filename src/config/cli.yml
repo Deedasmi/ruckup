@@ -10,14 +10,16 @@ args:
         help: Sets the temporary file storage location
         takes_value: true
     - src_loc:
-        short: s
-        long: src_loc
+        short: b
+        long: backup_location
         value_name: FILEPATH
         help: Adds a new location to be backed up
         takes_value: true
     - encrypt:
         short: e
+        long: encrypt
         help: Runs a backup
+        conflicts_with: scan
     - recover_all:
         long: recover_all
         help: "Recovers all files to their original location WARNING: This replaces all existing files"
@@ -30,3 +32,8 @@ args:
     - no_recover_meta:
         long: no-meta
         help: "Skips recovering of the meta_data table. WARNING: All encrypted data will be lost."
+    - scan:
+        short: s
+        long: scan
+        help: Scans for files that need to be backe dup
+        conflicts_with: encrypt
