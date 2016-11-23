@@ -146,12 +146,7 @@ fn main() {
 
     if matches.is_present("recover_all") {
         for e in dir_map.values().map(|x| x.back().unwrap()) {
-            let mut p = PathBuf::from(&e.src);
-            p.pop();
-            debug!("Creating directories for {:?}", &p);
-            create_dir_all(&p).expect(&format!("Error creating src directory {:?}", p));
-            info!("Decrypting {:?}", e.src);
-            lib::decrypt_f2f(&key, &e.dst, &e.src);
+            restore_file(&key, &e.dst, &e.src);
         }
 }
 
@@ -174,4 +169,13 @@ fn get_meta_data() -> lib::MetaTable {
         Err(_) => lib::MetaTable::new()
     };
     d
+}
+
+fn restore_file(key: &lib::secretbox::Key, enc_file: &PathBuf, recover_path: &PathBuf) {
+    let mut p = PathBuf::from(&recover_path);
+    p.pop();
+    debug!("Creating directories for {:?}", &p);
+    create_dir_all(&p).expect(&format!("Error creating src directory {:?}", p));
+    info!("Decrypting {:?}", enc_file);
+    lib::decrypt_f2f(&key, &enc_file, &recover_path);
 }
