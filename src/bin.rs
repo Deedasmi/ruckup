@@ -24,7 +24,9 @@ const APP_INFO: AppInfo = AppInfo {
     author: "ruckup",
 };
 lazy_static! {
-    static ref META_LOC: PathBuf  = app_dir(AppDataType::UserCache, &APP_INFO, "metadata/meta").unwrap();
+    static ref META_LOC: PathBuf  = { let mut x = app_dir(AppDataType::UserCache, &APP_INFO, "metadata").unwrap();
+    x.push("meta.json");
+    x };
 }
 
 #[allow(unused_variables)]
@@ -63,9 +65,8 @@ fn main() {
     // Load src folders
     let mut src_locs: Vec<PathBuf> =
         prefmap.get("src_locs".into()).and_then(|x| json::decode(x).ok()).unwrap_or_else(|| {
-            warn!("No src locations found! Adding metadata table to backup locations.");
-            prefmap.insert("src_locs".into(), json::encode(&*META_LOC).unwrap());
-            vec![(*META_LOC).clone()]
+            warn!("No src locations found!");
+            Vec::new()
         });
 
     println!("Settings loaded! Performing operations.");
@@ -149,7 +150,7 @@ fn main() {
 }
 
     // Save meta data (TEMP)
-    let mut f = File::create("test").unwrap();
+    let mut f = File::create(&*META_LOC).expect("Failed to open meta_data for saving");
     f.write_all(&json::encode(&dir_map).expect("Failed to encode hashmap").as_bytes()).unwrap();
 
     // Save preferences
@@ -158,6 +159,7 @@ fn main() {
 
 }
 
+/// Loads the meta-data table or creates a new one
 fn get_meta_data() -> lib::MetaTable {
     let mut v = Vec::new();
     let d: lib::MetaTable = match File::open(&*META_LOC) {

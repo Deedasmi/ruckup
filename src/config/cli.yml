@@ -1,7 +1,7 @@
 name: ruckup
-version: "0.0"
+version: "0.0.1"
 author: Richard P. <rap1011@ksu.edu>
-about: Stupid backup system
+about: Stupid backup system. Very much broken currently. Use at your own risk
 args:
     - temporary_storage:
         short: t
@@ -24,4 +24,9 @@ args:
         help: Runs a backup
     - recover_all:
         long: recover_all
-        help: Recovers all files
+        help: Recovers all files to their original location - NOTE THAT THIS REPLACES EXISTING FILES
+    - recover_to:
+        short: r
+        long: recover_to
+        help: Recovers all files to the specified destination.
+        takes_value: true
