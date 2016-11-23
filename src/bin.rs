@@ -147,8 +147,21 @@ fn main() {
     if matches.is_present("recover_all") {
         for e in dir_map.values().map(|x| x.back().unwrap()) {
             restore_file(&key, &e.dst, &e.src);
+            debug!("Recovered {:?}", &e.src);
         }
-}
+    }
+
+    if let Some(loc) = matches.value_of("recover_to") {
+        for e in dir_map.values().map(|x| x.back().unwrap()) {
+            let mut loc = PathBuf::from(&loc);
+            let mut c = e.src.components();
+            c.next();
+            c.next();
+            loc.push(c.as_path());
+            restore_file(&key, &e.dst, &loc);
+            debug!("Restored {:?} to {:?}", &e.src, loc);
+        } 
+    }
 
     // Save meta data (TEMP)
     let mut f = File::create(&*META_LOC).expect("Failed to open meta_data for saving");
