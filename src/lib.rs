@@ -27,9 +27,7 @@ const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
 /// Subject to changes. Known TODOs:
 ///
 /// * Instead of taking a file name, take a proper Path object or file pointer
-pub fn encrypt_f2f(key: &secretbox::Key,
-                   src_filename: &PathBuf,
-                   dest_filename: &PathBuf) {
+pub fn encrypt_f2f(key: &secretbox::Key, src_filename: &PathBuf, dest_filename: &PathBuf) {
 
     remove_file(dest_filename).ok();
 
@@ -59,14 +57,14 @@ pub fn encrypt_f2f(key: &secretbox::Key,
 ///
 /// * Instead of reading from file, 'stream' from buffer.
 /// * Instead of taking a file name, take a proper Path object or file pointer
-pub fn decrypt_f2f(key: &secretbox::Key,
-                   src_filename: &PathBuf,
-                   dest_filename: &PathBuf) {
+pub fn decrypt_f2f(key: &secretbox::Key, src_filename: &PathBuf, dest_filename: &PathBuf) {
 
     // Find a better way to do this
     remove_file(dest_filename).ok();
 
-    let mut nonce = secretbox::Nonce::from_slice(&read_data(src_filename, 0, secretbox::NONCEBYTES as u64)[..]).expect(&format!("Bad nonce for {:?}", src_filename));
+    let mut nonce =
+        secretbox::Nonce::from_slice(&read_data(src_filename, 0, secretbox::NONCEBYTES as u64)[..])
+            .expect(&format!("Bad nonce for {:?}", src_filename));
 
     // Get file size
     let mut r = 0;
@@ -74,7 +72,9 @@ pub fn decrypt_f2f(key: &secretbox::Key,
     let _ = File::create(&dest_filename);
 
     while r * CIPHER_SIZE < fs - secretbox::NONCEBYTES as u64 {
-        let ciphertext = read_data(src_filename, CIPHER_SIZE * r + secretbox::NONCEBYTES as u64, CIPHER_SIZE);
+        let ciphertext = read_data(src_filename,
+                                   CIPHER_SIZE * r + secretbox::NONCEBYTES as u64,
+                                   CIPHER_SIZE);
         let their_plaintext = decrypt(&ciphertext[..], &nonce, &key);
         write_data(dest_filename, &their_plaintext[..]);
         r += 1;
@@ -84,14 +84,18 @@ pub fn decrypt_f2f(key: &secretbox::Key,
 
 /// Decrypts a given file with a given key into a string
 pub fn decrypt_f2s(key: &secretbox::Key, enc_filename: &PathBuf) -> String {
-    let mut nonce = secretbox::Nonce::from_slice(&read_data(enc_filename, 0, secretbox::NONCEBYTES as u64)[..]).expect(&format!("Bad nonce for {:?}", enc_filename));
+    let mut nonce =
+        secretbox::Nonce::from_slice(&read_data(enc_filename, 0, secretbox::NONCEBYTES as u64)[..])
+            .expect(&format!("Bad nonce for {:?}", enc_filename));
     let mut r = 0;
     let fs = get_file_size(enc_filename);
 
     let mut o: String = String::new();
 
     while r * CIPHER_SIZE < fs - secretbox::NONCEBYTES as u64 {
-        let ciphertext = read_data(enc_filename, CIPHER_SIZE * r + secretbox::NONCEBYTES as u64, CIPHER_SIZE);
+        let ciphertext = read_data(enc_filename,
+                                   CIPHER_SIZE * r + secretbox::NONCEBYTES as u64,
+                                   CIPHER_SIZE);
         let their_plaintext = decrypt(&ciphertext[..], &nonce, &key);
         o += &(String::from_utf8(their_plaintext).expect("Failed to convert plaintext to String!"));
         r += 1;
@@ -245,11 +249,13 @@ pub fn create_enc_folder(ts: &PathBuf, num: u64) -> std::io::Result<()> {
 
 #[derive(RustcDecodable, RustcEncodable)]
 pub struct MetaTable {
-    records: HashMap<String, VecDeque<FileRecord>>
+    records: HashMap<String, VecDeque<FileRecord>>,
 }
 
 impl MetaTable {
-    pub fn new() -> MetaTable {MetaTable{records: HashMap::new()}}
+    pub fn new() -> MetaTable {
+        MetaTable { records: HashMap::new() }
+    }
     /// Inserts a record into the underlying HashMap
     /// Returns the inserted FileRecord
     pub fn insert(&mut self, k: &String, v: &DirEntry, dest: u64) -> &FileRecord {
@@ -262,13 +268,13 @@ impl MetaTable {
             self.records.get_mut(k).unwrap().push_back(nv);
         } else {
             debug!(target: "lib", "Creating new vector");
-            let mut vd:VecDeque<FileRecord> = VecDeque::with_capacity(3);
+            let mut vd: VecDeque<FileRecord> = VecDeque::with_capacity(3);
             vd.push_front(nv);
             self.records.insert(k.clone(), vd);
         }
         self.records.get(k).unwrap().back().unwrap()
     }
-     pub fn values(&self) -> Values<String, VecDeque<FileRecord>> {
+    pub fn values(&self) -> Values<String, VecDeque<FileRecord>> {
         self.records.values()
     }
     pub fn contains_key(&self, k: &String) -> bool {
@@ -276,6 +282,13 @@ impl MetaTable {
     }
     pub fn get_latest_modified(&self, k: &String) -> Option<u64> {
         self.records.get(k).map(|x| x.back().expect("Queue was empty somehow {}, k").last_modified)
+    }
+    /// Takes a directory of DirEntry (likely generated with get_file_vector) and removed all files from the metadata table
+    pub fn remove(&mut self, vk: Vec<DirEntry>) {
+        for i in vk.into_iter() {
+            info!(target: "lib", "Removing {:?}", i.path());
+            self.records.remove(&i.path().to_str().unwrap().to_owned());
+        }
     }
 }
 

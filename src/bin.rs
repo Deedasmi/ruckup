@@ -115,6 +115,14 @@ fn main() {
         false => get_meta_data(Some((&key, enc_file(&temp_store, file_num)))),
     };
 
+    // Parse --remove
+    if let Some(remdir) = matches.value_of("remove") {
+        info!(target: "print::important", "Removing {} from backup locations", &remdir);
+        let pdir = PathBuf::from(remdir);
+        src_locs.retain(|x| x != &pdir);
+        dir_map.remove(get_file_vector(&vec!(pdir)));
+    }
+
     // Encrypt all src_locs into the temporary store
     if matches.is_present("encrypt") {
         let now = SystemTime::now();

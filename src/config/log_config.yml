@@ -20,7 +20,7 @@ root:
     - stdout
 loggers:
   print:
-    level: debug
+    level: info
     appenders:
       - print
     additive: false

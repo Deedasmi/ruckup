@@ -37,3 +37,10 @@ args:
         long: scan
         help: Scans for files that need to be backe dup
         conflicts_with: encrypt
+    - remove:
+        short: d
+        long: remove
+        help: "Deletes directory from backup locations. WARNING: This is recursive and will remove all subdirectories."
+        conflicts_with: src_loc
+        value_name: FILEPATH
+        takes_value: true
