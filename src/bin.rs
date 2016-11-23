@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use std::fs::{File, create_dir_all};
 use std::io::{Read, Write};
 use std::time::SystemTime;
+use lib::*;
 
 const PREFLOC: &'static str = "preferences/ruckup";
 const APP_INFO: AppInfo = AppInfo {
@@ -52,11 +53,11 @@ fn main() {
     // Load key
     debug!("Loading key");
 
-    let key: lib::secretbox::Key = prefmap.get("key".into())
+    let key: secretbox::Key = prefmap.get("key".into())
         .and_then(|x| json::decode(x).ok())
         .unwrap_or_else(|| {
             warn!("No key found! Assumed intentional");
-            let k = lib::secretbox::gen_key();
+            let k = secretbox::gen_key();
             prefmap.insert("key".into(), json::encode(&k).unwrap());
             k
         });
@@ -114,7 +115,7 @@ fn main() {
     if matches.is_present("encrypt") {
         let now = SystemTime::now();
         // Build walkdir iterator
-        let all_files = lib::get_file_vector(src_locs);
+        let all_files = get_file_vector(src_locs);
         let total_files = all_files.clone().into_iter().count();
         info!("{} files found", total_files);
         let mut num_files: u64 = 0;
@@ -129,20 +130,15 @@ fn main() {
                 num_files += 1;
                 let p = entry.path().to_str().expect("Unable to convert file_path to &str").to_owned();
                 if let Some(fr) = dir_map.get_latest_modified(&p) {
-                    if md.modified().unwrap().duration_since(lib::UNIX_EPOCH).unwrap().as_secs() == fr {
+                    if md.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs() == fr {
                         debug!("File {} hasn't changed since last backup", &p);
                         continue;
                     }
                 }
-                let mut fp = temp_store.clone();
-                fp.push((file_num / 100000).to_string());
-                fp.push((file_num % 100000 / 1000).to_string());
-                create_dir_all(&fp).expect("Unable to write to temporary store!");
-                fp.push((file_num % 1000).to_string());
-                let c = dir_map.insert(&p, &entry, fp.clone());
+                let _ = dir_map.insert(&p, &entry, file_num);
+                create_enc_folder(&temp_store, file_num).expect("Unable to create temporary encrypted file!");
                 let p = PathBuf::from(&p);
-                debug!("{:?} had {:?} before entry", &p, c);
-                let n = lib::encrypt_f2f(&key, &p, &fp);
+                let n = encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num));
                 debug!(target: "file_log", "{:?} - {}", &p, file_num);
                 file_num += 1;
                 enc_files += 1;
@@ -159,7 +155,7 @@ fn main() {
         let now = SystemTime::now();
         let mut recovered: u64 = 0;
         for e in dir_map.values().map(|x| x.back().unwrap()) {
-            restore_file(&key, &e.dst, &e.src);
+            restore_file(&key, enc_folder(&temp_store, e.file_num), &e.src);
             debug!("Recovered {:?}", &e.src);
             println!("Recovered {} files", recovered);
             recovered += 1;
@@ -181,7 +177,7 @@ fn main() {
                 _ => ()
             }
             loc.push(c.as_path());
-            restore_file(&key, &e.dst, &loc);
+            restore_file(&key, enc_file(&temp_store, e.file_num), &loc);
             debug!("Restored {:?} to {:?}", &e.src, loc);
             recovered += 1;
             if recovered % 100 == 0 {
@@ -202,21 +198,21 @@ fn main() {
 }
 
 /// Loads the meta-data table or creates a new one
-fn get_meta_data() -> lib::MetaTable {
+fn get_meta_data() -> MetaTable {
     let mut v = Vec::new();
-    let d: lib::MetaTable = match File::open(&*META_LOC) {
+    let d: MetaTable = match File::open(&*META_LOC) {
         Ok(mut x) => { x.read_to_end(&mut v).expect("Failed on reading meta-data file");
                 json::decode(&String::from_utf8(v).unwrap()).unwrap() },
-        Err(_) => lib::MetaTable::new()
+        Err(_) => MetaTable::new()
     };
     d
 }
 
-fn restore_file(key: &lib::secretbox::Key, enc_file: &PathBuf, recover_path: &PathBuf) {
+fn restore_file(key: &secretbox::Key, enc_file: PathBuf, recover_path: &PathBuf) {
     let mut p = PathBuf::from(&recover_path);
     p.pop();
     debug!("Creating directories for {:?}", &p);
     create_dir_all(&p).expect(&format!("Error creating src directory {:?}", p));
     debug!("Decrypting {:?}", enc_file);
-    lib::decrypt_f2f(&key, &enc_file, &recover_path);
+    decrypt_f2f(&key, &enc_file, &recover_path);
 }

@@ -9,7 +9,7 @@ extern crate log;
 pub use rust_sodium::crypto::secretbox;
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use std::fs::{File, OpenOptions, metadata, remove_file};
+use std::fs::{File, OpenOptions, metadata, remove_file, create_dir_all};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 pub use std::time::UNIX_EPOCH;
@@ -159,16 +159,10 @@ pub fn get_file_vector(src_locs: Vec<PathBuf>) -> Vec<DirEntry> {
 }
 
 /// Struct for recording files that are walked into a serilazable format
-/// # Example
-/// ```
-/// use rustc_serialize::json;
-/// let fr = FileRecord::new("11mb.txt");
-/// json::decode(&fr).unwrap();
-///
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug)]
 pub struct FileRecord {
     pub src: PathBuf,
-    pub dst: PathBuf,
+    pub file_num: u64,
     pub last_modified: u64,
     enc_hash: Option<String>,
 }
@@ -181,7 +175,7 @@ impl Hash for FileRecord {
 
 impl FileRecord {
     /// Generates a new FileRecord from a file and a destination path
-    pub fn new(file: &DirEntry, dst: PathBuf) -> FileRecord {
+    pub fn new(file: &DirEntry, file_num: u64) -> FileRecord {
         let t = file.metadata()
             .unwrap()
             .modified()
@@ -191,11 +185,46 @@ impl FileRecord {
             .unwrap();
         FileRecord {
             src: file.path().to_path_buf(),
-            dst: dst.clone(),
+            file_num: file_num,
             last_modified: t,
             enc_hash: None,
         }
     }
+}
+
+/// Convience function to generate the folder where an encrypted file is stored
+/// # Example
+/// ```
+/// use std::path::PathBuf;
+/// let t = PathBuf::from("d:\\");
+/// let num: u64 = 1263472;
+/// assert_eq!(lib::enc_folder(&t, num), PathBuf::from("d:\\1\\263\\"));
+/// ```
+pub fn enc_folder(ts: &PathBuf, num: u64) -> PathBuf {
+    let mut fp = ts.clone();
+    fp.push((num / 1000000).to_string());
+    fp.push((num % 1000000 / 1000).to_string());
+    fp
+}
+
+/// Convience function to generate the full path where an encrypted file is stored
+/// # Example
+/// ```
+/// use std::path::PathBuf;
+/// let t = PathBuf::from("d:\\");
+/// let num: u64 = 1263472;
+/// assert_eq!(lib::enc_file(&t, num), PathBuf::from("d:\\1\\263\\472"));
+/// ```
+pub fn enc_file(ts: &PathBuf, num: u64) -> PathBuf {
+    let mut fp = enc_folder(&ts, num);
+    fp.push((num % 1000).to_string());
+    fp
+}
+
+/// Convience function to generate the full path where an encrypted file is stored
+/// Just a combination between enc_folder and std::fs::create_dir_all
+pub fn create_enc_folder(ts: &PathBuf, num: u64) -> std::io::Result<()> {
+    create_dir_all(enc_folder(&ts, num))
 }
 
 #[derive(RustcDecodable, RustcEncodable)]
@@ -206,24 +235,22 @@ pub struct MetaTable {
 impl MetaTable {
     pub fn new() -> MetaTable {MetaTable{records: HashMap::new()}}
     /// Inserts a record into the underlying HashMap
-    /// Returns the number of records BEFORE entry
-    pub fn insert(&mut self, k: &String, v: &DirEntry, dest: PathBuf) -> Option<usize> {
+    /// Returns the inserted FileRecord
+    pub fn insert(&mut self, k: &String, v: &DirEntry, dest: u64) -> &FileRecord {
         let nv = FileRecord::new(v, dest);
         if self.records.contains_key(k) {
-            let c = self.records.get(k).unwrap().len();
-            if c == 3 {
+            if self.records.get(k).unwrap().len() == 3 {
                 let o = self.records.get_mut(k).unwrap().pop_front().unwrap();
                 debug!(target:"lib", "Dropped an old record for {:?}", o);
             }
             self.records.get_mut(k).unwrap().push_back(nv);
-            Some(c)
         } else {
             debug!(target: "lib", "Creating new vector");
             let mut vd:VecDeque<FileRecord> = VecDeque::with_capacity(3);
             vd.push_front(nv);
             self.records.insert(k.clone(), vd);
-            None
         }
+        self.records.get(k).unwrap().back().unwrap()
     }
      pub fn values(&self) -> Values<String, VecDeque<FileRecord>> {
         self.records.values()
@@ -264,11 +291,14 @@ impl PartialEq for DirHash {
 
 #[test]
 fn p_d_same() {
-    let fs = get_file_size("test_file/11mb.txt");
+    let s = PathBuf::from("test_file/11mb.txt");
+    let c = PathBuf::from("cipher.txt");
+    let o = PathBuf::from("output.txt");
+    let fs = get_file_size(&s);
     let key = secretbox::gen_key();
-    let p = read_data("test_file/11mb.txt", 0, fs);
-    let nonce = encrypt(&key, "test_file/11mb.txt", "cipher.txt");
-    decrypt(key, nonce, "cipher.txt", "output.txt");
-    let d = read_data("output.txt", 0, fs);
+    let p = read_data(&s, 0, fs);
+    let _ = encrypt_f2f(&key, &s, &c);
+    decrypt_f2f(&key, &c, &o);
+    let d = read_data(&o, 0, fs);
     assert_eq!(p, d);
 }
