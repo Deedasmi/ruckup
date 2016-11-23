@@ -114,19 +114,28 @@ fn main() {
         .map(|x| PathBuf::from(x))
         .expect("Need a temporary storage location! Set with ruckup -t <path>");
 
+    // Encrypt all src_locs into the temporary store
     if matches.is_present("encrypt") {
         println!("Running encryption!");
         info!("Starting encryption!");
         // Build encrypter iterator
         for entry in all_files.into_iter() {
-            if entry.metadata().unwrap().is_file() {
-                let p = entry.path().to_path_buf();
+            let md = entry.metadata().unwrap();
+            if md.is_file() {
+                let p = entry.path().to_str().expect("Unable to convert file_path to &str").to_owned();
+                if let Some(fr) = dir_map.get_latest_modified(&p) {
+                    if md.modified().unwrap().duration_since(lib::UNIX_EPOCH).unwrap().as_secs() == fr {
+                        debug!("File {} hasn't changed since last backup", &p);
+                        continue;
+                    }
+                }
                 let mut fp = temp_store.clone();
                 fp.push((file_num / 100000).to_string());
                 fp.push((file_num % 100000 / 1000).to_string());
-                create_dir_all(&fp).unwrap();
+                create_dir_all(&fp).expect("Unable to write to temporary store!");
                 fp.push((file_num % 1000).to_string());
-                let c = dir_map.insert(&p.to_str().unwrap().to_owned(), &entry, fp.clone());
+                let c = dir_map.insert(&p, &entry, fp.clone());
+                let p = PathBuf::from(&p);
                 debug!("{:?} had {:?} before entry", &p, c);
                 let n = lib::encrypt_f2f(&key, &p, &fp);
                 file_num += 1;
@@ -134,11 +143,6 @@ fn main() {
         }
         prefmap.insert("file_num".into(), json::encode(&file_num).unwrap());
     }
-
-    
-// TEMP
-    remove_file("test_file/11mb.txt").ok();  
-    remove_file("test_file/11mbsha256").ok();
 
     if matches.is_present("recover_all") {
         for v in dir_map.values() {

@@ -12,7 +12,7 @@ use std::io::SeekFrom;
 use std::fs::{File, OpenOptions, metadata, remove_file};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use std::time::UNIX_EPOCH;
+pub use std::time::UNIX_EPOCH;
 pub use walkdir::{WalkDir, DirEntry};
 use itertools::Itertools;
 use std::collections::{HashMap, VecDeque};
@@ -216,7 +216,7 @@ impl MetaTable {
                 debug!(target:"lib", "Dropped an old record for {:?}", o);
             }
             self.records.get_mut(k).unwrap().push_back(nv);
-            Some(self.records.get(k).unwrap().len())
+            Some(c)
         } else {
             debug!(target: "lib", "Creating new vector");
             let mut vd:VecDeque<FileRecord> = VecDeque::with_capacity(3);
@@ -227,7 +227,13 @@ impl MetaTable {
     }
      pub fn values(&self) -> Values<String, VecDeque<FileRecord>> {
         self.records.values()
-}
+    }
+    pub fn contains_key(&self, k: &String) -> bool {
+        self.records.contains_key(k)
+    }
+    pub fn get_latest_modified(&self, k: &String) -> Option<u64> {
+        self.records.get(k).map(|x| x.back().expect("Queue was empty somehow {}, k").last_modified)
+    }
 }
 
 /// This is a really dumb struct to make DirEntry hashable
