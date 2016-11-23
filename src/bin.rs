@@ -16,6 +16,7 @@ use app_dirs::{app_dir, AppDataType};
 use std::path::PathBuf;
 use std::fs::{File, create_dir_all};
 use std::io::{Read, Write};
+use std::time::SystemTime;
 
 const PREFLOC: &'static str = "preferences/ruckup";
 const APP_INFO: AppInfo = AppInfo {
@@ -111,6 +112,7 @@ fn main() {
 
     // Encrypt all src_locs into the temporary store
     if matches.is_present("encrypt") {
+        let now = SystemTime::now();
         // Build walkdir iterator
         let all_files = lib::get_file_vector(src_locs);
         let total_files = all_files.clone().into_iter().count();
@@ -150,17 +152,27 @@ fn main() {
             }
         }
         prefmap.insert("file_num".into(), json::encode(&file_num).unwrap());
-        info!("Found {} folders and {} files. Encrypted {} files.", total_files as u64 - num_files, num_files, enc_files); 
+        println!("Found {} folders and {} files. Encrypted {} files in {} seconds.", total_files as u64 - num_files, num_files, enc_files, now.elapsed().unwrap().as_secs()); 
     }
 
     if matches.is_present("recover_all") {
+        let now = SystemTime::now();
+        let mut recovered: u64 = 0;
         for e in dir_map.values().map(|x| x.back().unwrap()) {
             restore_file(&key, &e.dst, &e.src);
             debug!("Recovered {:?}", &e.src);
+            println!("Recovered {} files", recovered);
+            recovered += 1;
+            if recovered % 100 == 0 {
+                println!("Recovered {} files", recovered);
+            }
         }
+        println!("Recovered {} files in {} seconds", recovered, now.elapsed().unwrap().as_secs());
     }
 
     if let Some(loc) = matches.value_of("recover_to") {
+        let now = SystemTime::now();
+        let mut recovered: u64 = 0;
         for e in dir_map.values().map(|x| x.back().unwrap()) {
             let mut loc = PathBuf::from(&loc);
             let mut c = e.src.components();
@@ -171,7 +183,12 @@ fn main() {
             loc.push(c.as_path());
             restore_file(&key, &e.dst, &loc);
             debug!("Restored {:?} to {:?}", &e.src, loc);
+            recovered += 1;
+            if recovered % 100 == 0 {
+                println!("Recovered {} files", recovered);
+            }
         } 
+        println!("Recovered {} files in {} seconds", recovered, now.elapsed().unwrap().as_secs());
     }
 
     // Save meta data (TEMP)
@@ -200,6 +217,6 @@ fn restore_file(key: &lib::secretbox::Key, enc_file: &PathBuf, recover_path: &Pa
     p.pop();
     debug!("Creating directories for {:?}", &p);
     create_dir_all(&p).expect(&format!("Error creating src directory {:?}", p));
-    info!("Decrypting {:?}", enc_file);
+    debug!("Decrypting {:?}", enc_file);
     lib::decrypt_f2f(&key, &enc_file, &recover_path);
 }

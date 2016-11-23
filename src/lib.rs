@@ -135,6 +135,7 @@ fn read_data(filename: &PathBuf, offset: u64, limit: u64) -> Vec<u8> {
 fn write_data(filename: &PathBuf, data: &[u8]) {
     let mut f = OpenOptions::new()
         .append(true)
+        .create(true)
         .open(filename)
         .expect(&format!("Failed to open or create file {:?}", filename));
     f.write_all(data).unwrap();
