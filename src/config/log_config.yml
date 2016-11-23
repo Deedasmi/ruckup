@@ -2,28 +2,34 @@ refresh_rate: 30 seconds
 appenders:
   stdout:
     kind: console
+  print:
+    kind: console
+    encoder:
+      pattern: "{l} - {m}{n}"
+  log:
+    kind: file
+    path: "log/ruckup.log"
   lib:
     kind: file
     path: "log/lib.log"
     encoder:
       pattern: "{d} - {m}{n}"
-  files:
-    kind: file
-    path: "log/files.log"
-    encoder:
-      pattern: "{m}{n}"
 root:
   level: info
   appenders:
     - stdout
 loggers:
+  print:
+    level: debug
+    appenders:
+      - print
+    additive: false
+  print::important:
+    level: info
+    appenders:
+      - log
   lib:
     level: debug
     appenders:
       - lib
-    additive: false
-  file_log:
-    level: debug
-    appenders:
-      - files
     additive: false
