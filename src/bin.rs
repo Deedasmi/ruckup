@@ -75,10 +75,13 @@ fn main() {
     // Argument parsing
     // Parse -ts
     if let Some(ts) = matches.value_of("temporary_storage") {
-        // TODO Verify path
-        prefmap.insert("temp_store".into(), json::encode(&ts).unwrap());
-        println!("Set temporary storage to {}", ts);
-        debug!("Set temporary storage to {}", ts);
+        if PathBuf::from(ts).is_absolute() {
+            prefmap.insert("temp_store".into(), json::encode(&ts).unwrap());
+            println!("Set temporary storage to {}", ts);
+            debug!("Set temporary storage to {}", ts);
+        } else {
+            warn!("Temporary storage path must be absolute path!");
+        }
     }
 
     // Parse -s
@@ -88,11 +91,13 @@ fn main() {
         if src_locs.contains(&p) {
             println!("{} already in backup locations!", s);
             debug!("{} already in backup locations!", s);
+        } else if !p.is_absolute() {
+            warn!("Backup locations must be absolute paths!");
         } else {
-        src_locs.push(PathBuf::from(s));
-        prefmap.insert("src_locs".into(), json::encode(&src_locs).unwrap());
-        println!("Added {} to backup locations!", s);
-        debug!("Added {} to backup locations!", s);
+            src_locs.push(PathBuf::from(s));
+            prefmap.insert("src_locs".into(), json::encode(&src_locs).unwrap());
+            println!("Added {} to backup locations!", s);
+            debug!("Added {} to backup locations!", s);
         }
     };
 
@@ -166,24 +171,29 @@ fn main() {
     }
 
     if let Some(loc) = matches.value_of("recover_to") {
-        let now = SystemTime::now();
-        let mut recovered: u64 = 0;
-        for e in dir_map.values().map(|x| x.back().unwrap()) {
-            let mut loc = PathBuf::from(&loc);
-            let mut c = e.src.components();
-            match c.next().unwrap() {
-                std::path::Component::Prefix(_) => { c.next(); },
-                _ => ()
-            }
-            loc.push(c.as_path());
-            restore_file(&key, enc_file(&temp_store, e.file_num), &loc);
-            debug!("Restored {:?} to {:?}", &e.src, loc);
-            recovered += 1;
-            if recovered % 100 == 0 {
-                println!("Recovered {} files", recovered);
-            }
-        } 
-        println!("Recovered {} files in {} seconds", recovered, now.elapsed().unwrap().as_secs());
+        let ploc = PathBuf::from(loc);
+        if ploc.is_absolute() {
+            let now = SystemTime::now();
+            let mut recovered: u64 = 0;
+            for e in dir_map.values().map(|x| x.back().unwrap()) {
+                let mut floc = ploc.clone();
+                let mut c = e.src.components();
+                match c.next().unwrap() {
+                    std::path::Component::Prefix(_) => { c.next(); },
+                    _ => ()
+                }
+                floc.push(c.as_path());
+                restore_file(&key, enc_file(&temp_store, e.file_num), &floc);
+                debug!("Restored {:?} to {:?}", &e.src, floc);
+                recovered += 1;
+                if recovered % 100 == 0 {
+                    println!("Recovered {} files", recovered);
+                }
+            } 
+            println!("Recovered {} files in {} seconds", recovered, now.elapsed().unwrap().as_secs());
+        } else {
+            warn!("Recovery location must be an absolute path!");
+        }
     }
 
     // Save meta data
