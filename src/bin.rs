@@ -104,10 +104,6 @@ fn main() {
     // Create hashmap
     let mut dir_map = get_meta_data();
 
-    // Build walkdir iterator
-    let all_files = lib::get_file_vector(src_locs);
-    info!("{} files found", all_files.clone().into_iter().count());
-
     // Load storage location
     let temp_store: PathBuf = prefmap.get("temp_store".into())
         .and_then(|x: &String| -> Option<String> {json::decode(&x).ok() })
@@ -116,6 +112,10 @@ fn main() {
 
     // Encrypt all src_locs into the temporary store
     if matches.is_present("encrypt") {
+        // Build walkdir iterator
+        let all_files = lib::get_file_vector(src_locs);
+        info!("{} files found", all_files.clone().into_iter().count());
+
         println!("Running encryption!");
         info!("Starting encryption!");
         // Build encrypter iterator
@@ -145,11 +145,13 @@ fn main() {
     }
 
     if matches.is_present("recover_all") {
-        for v in dir_map.values() {
-            for e in v.into_iter() {
-                info!("Decrypting {:?}", e.src);
-                lib::decrypt_f2f(&key, &e.dst, &e.src);
-            }
+        for e in dir_map.values().map(|x| x.back().unwrap()) {
+            let mut p = PathBuf::from(&e.src);
+            p.pop();
+            debug!("Creating directories for {:?}", &p);
+            create_dir_all(&p).expect(&format!("Error creating src directory {:?}", p));
+            info!("Decrypting {:?}", e.src);
+            lib::decrypt_f2f(&key, &e.dst, &e.src);
         }
 }
 
