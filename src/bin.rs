@@ -14,9 +14,8 @@ use rustc_serialize::json;
 use clap::App;
 use app_dirs::{app_dir, AppDataType};
 use std::path::PathBuf;
-use std::fs::File;
+use std::fs::{File, create_dir_all};
 use std::io::{Read, Write};
-use std::fs::{remove_file, create_dir_all};
 
 const PREFLOC: &'static str = "preferences/ruckup";
 const APP_INFO: AppInfo = AppInfo {
@@ -114,7 +113,10 @@ fn main() {
     if matches.is_present("encrypt") {
         // Build walkdir iterator
         let all_files = lib::get_file_vector(src_locs);
-        info!("{} files found", all_files.clone().into_iter().count());
+        let total_files = all_files.clone().into_iter().count();
+        info!("{} files found", total_files);
+        let mut num_files: u64 = 0;
+        let mut enc_files: u64 = 0;
 
         println!("Running encryption!");
         info!("Starting encryption!");
@@ -122,6 +124,7 @@ fn main() {
         for entry in all_files.into_iter() {
             let md = entry.metadata().unwrap();
             if md.is_file() {
+                num_files += 1;
                 let p = entry.path().to_str().expect("Unable to convert file_path to &str").to_owned();
                 if let Some(fr) = dir_map.get_latest_modified(&p) {
                     if md.modified().unwrap().duration_since(lib::UNIX_EPOCH).unwrap().as_secs() == fr {
@@ -138,10 +141,16 @@ fn main() {
                 let p = PathBuf::from(&p);
                 debug!("{:?} had {:?} before entry", &p, c);
                 let n = lib::encrypt_f2f(&key, &p, &fp);
+                debug!(target: "file_log", "{:?} - {}", &p, file_num);
                 file_num += 1;
+                enc_files += 1;
+                if enc_files % 100 == 0 {
+                    info!("{} files completed", enc_files);
+                }
             }
         }
         prefmap.insert("file_num".into(), json::encode(&file_num).unwrap());
+        info!("Found {} folders and {} files. Encrypted {} files.", total_files as u64 - num_files, num_files, enc_files); 
     }
 
     if matches.is_present("recover_all") {
