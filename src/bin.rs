@@ -42,10 +42,6 @@ fn main() {
     let yaml = load_yaml!("config/cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
 
-    // TODO Have this effect logging level
-    // Set verbosity level
-    let v = matches.occurrences_of("verbose");
-
     // Load preferences
     let mut prefmap = PreferencesMap::<String>::load(&APP_INFO, &PREFLOC)
         .unwrap_or(PreferencesMap::<String>::new());
@@ -141,7 +137,7 @@ fn main() {
                 let _ = dir_map.insert(&p, &entry, file_num);
                 create_enc_folder(&temp_store, file_num).expect("Unable to create temporary encrypted file!");
                 let p = PathBuf::from(&p);
-                let n = encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num));
+                encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num));
                 debug!(target: "file_log", "{:?} - {}", &p, file_num);
                 file_num += 1;
                 enc_files += 1;

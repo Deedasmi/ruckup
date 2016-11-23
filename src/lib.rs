@@ -29,8 +29,7 @@ const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
 /// * Instead of taking a file name, take a proper Path object or file pointer
 pub fn encrypt_f2f(key: &secretbox::Key,
                    src_filename: &PathBuf,
-                   dest_filename: &PathBuf)
-                   -> secretbox::Nonce {
+                   dest_filename: &PathBuf) {
 
     remove_file(dest_filename).ok();
 
@@ -51,7 +50,6 @@ pub fn encrypt_f2f(key: &secretbox::Key,
         r += 1;
         nonce = nonce.increment_le();
     }
-    nonce
 }
 
 /// Decrypts a given file with a given nonce and key, and saves that to a file
@@ -315,7 +313,7 @@ fn p_d_same() {
     let fs = get_file_size(&s);
     let key = secretbox::gen_key();
     let p = read_data(&s, 0, fs);
-    let _ = encrypt_f2f(&key, &s, &c);
+    encrypt_f2f(&key, &s, &c);
     decrypt_f2f(&key, &c, &o);
     let d = read_data(&o, 0, fs);
     assert_eq!(p, d);
