@@ -164,8 +164,7 @@ fn main() {
         for e in dir_map.values().map(|x| x.back().unwrap()) {
             let mut loc = PathBuf::from(&loc);
             let mut c = e.src.components();
-            let p_or_r = c.next();
-            match p_or_r.unwrap() {
+            match c.next().unwrap() {
                 std::path::Component::Prefix(_) => { c.next(); },
                 _ => ()
             }
