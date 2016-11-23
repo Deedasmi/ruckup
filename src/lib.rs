@@ -42,7 +42,6 @@ pub fn encrypt_f2f(key: &secretbox::Key,
     let mut r: u64 = 0;
     let fs = get_file_size(src_filename);
 
-
     // Get plaintext and encrypt
     while r * CHUNK_SIZE < fs {
         let plaintext = read_data(src_filename, r * CHUNK_SIZE, CHUNK_SIZE);
@@ -74,8 +73,9 @@ pub fn decrypt_f2f(key: &secretbox::Key,
     // Get file size
     let mut r = 0;
     let fs = get_file_size(src_filename);
+    let _ = File::create(&dest_filename);
 
-    while r * CIPHER_SIZE < fs {
+    while r * CIPHER_SIZE < fs - secretbox::NONCEBYTES as u64 {
         let ciphertext = read_data(src_filename, CIPHER_SIZE * r + secretbox::NONCEBYTES as u64, CIPHER_SIZE);
         let their_plaintext = decrypt(&ciphertext[..], &nonce, &key);
         write_data(dest_filename, &their_plaintext[..]);
@@ -135,7 +135,6 @@ fn read_data(filename: &PathBuf, offset: u64, limit: u64) -> Vec<u8> {
 fn write_data(filename: &PathBuf, data: &[u8]) {
     let mut f = OpenOptions::new()
         .append(true)
-        .create(true)
         .open(filename)
         .expect(&format!("Failed to open or create file {:?}", filename));
     f.write_all(data).unwrap();

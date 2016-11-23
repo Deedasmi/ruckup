@@ -7,8 +7,13 @@ appenders:
     path: "log/lib.log"
     encoder:
       pattern: "{d} - {m}{n}"
+  files:
+    kind: file
+    path: "log/files.log"
+    encoder:
+      pattern: "{m}{n}"
 root:
-  level: debug
+  level: info
   appenders:
     - stdout
 loggers:
@@ -16,4 +21,9 @@ loggers:
     level: debug
     appenders:
       - lib
+    additive: false
+  file_log:
+    level: debug
+    appenders:
+      - files
     additive: false
