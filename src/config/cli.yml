@@ -23,12 +23,14 @@ args:
     - recover_all:
         long: recover_all
         help: "Recovers all files to their original location WARNING: This replaces all existing files"
+        conflicts_with: recover_to
     - recover_to:
         short: r
         long: recover_to
         value_name: FILEPATH
         help: Recovers all files to the specified destination.
         takes_value: true
+        conflicts_with: recover_all
     - no_recover_meta:
         long: no-meta
         help: "Skips recovering of the meta_data table. WARNING: All encrypted data will be lost."

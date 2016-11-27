@@ -112,15 +112,15 @@ fn main() {
     debug!(target: "print", "Source locations: {:?}", src_locs);
 
     // Load storage location
-    let temp_store: PathBuf = prefmap.get("temp_store".into())
+    let temp_store: Arc<PathBuf> = Arc::new(prefmap.get("temp_store".into())
         .and_then(|x: &String| -> Option<String> { json::decode(&x).ok() })
         .map(|x| PathBuf::from(x))
-        .expect("Need a temporary storage location! Set with ruckup -t <path>");
+        .expect("Need a temporary storage location! Set with ruckup -t <path>"));
 
     // Create hashmap
     let mut dir_map = match matches.is_present("no_recover_meta") || file_num == 0 {
         true => get_meta_data(None),
-        false => get_meta_data(Some((&key, enc_file(&temp_store, file_num)))),
+        false => get_meta_data(Some((&key, enc_file(&temp_store.clone(), file_num)))),
     };
 
     // Parse --remove
@@ -145,9 +145,8 @@ fn main() {
         let changed_files = get_changed_files(all_files, &dir_map);
         let enc_files = changed_files.len();
         for entry in changed_files.into_iter() {
-            let temp_store = temp_store.clone(); // Would be more effecient as an arc
             let md = entry.metadata().unwrap();
-            let tx = tx.clone();
+            let (temp_store, key, tx) = clone_three(&temp_store, &key, &tx);
             create_enc_folder(&temp_store, file_num)
                 .expect("Unable to create temporary encrypted file!");
             let p = PathBuf::from(&entry.path());
@@ -155,8 +154,8 @@ fn main() {
             pool.execute(move || {
                 info!(target: "print::important", "Encrypting file {:?} to {}", &p, file_num);
                 encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num));
-                debug!(target: "print::important", "Finished encrypting {}", file_num);
                 tx.send((p, entry.clone(), file_num)).unwrap();
+                debug!(target: "print::important", "Finished encrypting {}", file_num);
             });
             file_num += 1
         }
@@ -183,46 +182,47 @@ fn main() {
         info!(target: "print::imporant", "Found {} files/folders, {} of which need backed up. Took {} seconds.", total_files, changed.len(), now.elapsed().unwrap().as_secs());
     }
 
-    if matches.is_present("recover_all") {
+    // Both bulk recovery options
+    if matches.is_present("recover_all") || matches.is_present("recover_to") {
+        let prepend = matches.value_of("recover_to");
         let now = SystemTime::now();
-        let mut recovered: u64 = 0;
-        for e in dir_map.values().map(|x| x.back().unwrap()) {
-            restore_file(&key, enc_folder(&temp_store, e.file_num), &e.src);
-            debug!("Recovered {:?}", &e.src);
-            recovered += 1;
-            if recovered % 100 == 0 {
-                println!("Recovered {} files", recovered);
-            }
+        let (tx, rx) = channel();
+        let mut nv: Vec<lib::FileRecord> = Vec::new();
+        for e in dir_map.values() {
+            nv.push(e.back().unwrap().clone());
         }
-        info!(target: "print::imporatnt", "Recovered {} files in {} seconds", recovered, now.elapsed().unwrap().as_secs());
-    }
-
-    if let Some(loc) = matches.value_of("recover_to") {
-        let ploc = PathBuf::from(loc);
-        if ploc.is_absolute() {
-            let now = SystemTime::now();
-            let mut recovered: u64 = 0;
-            for e in dir_map.values().map(|x| x.back().unwrap()) {
-                let mut floc = ploc.clone();
-                let mut c = e.src.components();
-                match c.next().unwrap() {
-                    std::path::Component::Prefix(_) => {
-                        c.next();
+        for e in nv.into_iter() {
+            let (temp_store, key, tx) = clone_three(&temp_store, &key, &tx);
+            let path = match prepend {
+                Some(expr) => {
+                    let mut floc = PathBuf::from(expr);
+                    if !floc.is_absolute() {
+                        panic!("Recovery path much be absolute!");
                     }
-                    _ => (),
+                    let mut c = e.src.components();
+                    match c.next().unwrap() {
+                        std::path::Component::Prefix(_) => {
+                            c.next();
+                        }
+                        _ => (),
+                    }
+                    floc.push(c.as_path());
+                    floc
                 }
-                floc.push(c.as_path());
-                restore_file(&key, enc_file(&temp_store, e.file_num), &floc);
-                debug!("Restored {:?} to {:?}", &e.src, floc);
-                recovered += 1;
-                if recovered % 100 == 0 {
-                    println!("Recovered {} files", recovered);
-                }
-            }
-            info!(target: "print::imporatnt", "Recovered {} files in {} seconds", recovered, now.elapsed().unwrap().as_secs());
-        } else {
-            warn!("Recovery location must be an absolute path!");
+                None => e.src.to_owned(),
+            };
+            pool.execute(move || {
+                info!(target: "print::important", "Decrypting file {:?} to {:?}", enc_file(&temp_store, e.file_num), path);
+                restore_file(&key, enc_file(&temp_store, e.file_num), &path);
+                debug!(target: "print::important", "Finished decrypting file {}", e.file_num);
+                tx.send(path).unwrap();
+            });
         }
+        for x in 0..dir_map.len() {
+            let src = rx.recv().unwrap();
+            debug!(target: "print::important", "Decrypted {:?}", src);
+        }
+        info!(target: "print::imporatnt", "Recovered {} files in {} seconds", dir_map.len(), now.elapsed().unwrap().as_secs());
     }
 
     // Save meta data
@@ -270,4 +270,8 @@ fn restore_file(key: &secretbox::Key, enc_file: PathBuf, recover_path: &PathBuf)
     create_dir_all(&p).expect(&format!("Error creating src directory {:?}", p));
     debug!("Decrypting {:?}", enc_file);
     decrypt_f2f(&key, &enc_file, &recover_path);
+}
+
+fn clone_three<T: Clone, U: Clone, V: Clone>(t: &T, u: &U, v: &V) -> (T, U, V) {
+    (t.clone(), u.clone(), v.clone())
 }

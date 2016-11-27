@@ -197,7 +197,7 @@ pub fn get_changed_files(files: Vec<DirEntry>, dir_map: &MetaTable) -> Vec<DirEn
 }
 
 /// Struct for recording files that are walked into a serilazable format
-#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug)]
+#[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub struct FileRecord {
     pub src: PathBuf,
     pub file_num: u64,
@@ -300,6 +300,9 @@ impl MetaTable {
     }
     pub fn get_latest_modified(&self, k: &String) -> Option<u64> {
         self.records.get(k).map(|x| x.back().expect("Queue was empty somehow {}, k").last_modified)
+    }
+    pub fn len(&self) -> usize {
+        self.records.len()
     }
     /// Takes a directory of DirEntry (likely generated with get_file_vector) and removed all files from the metadata table
     pub fn remove(&mut self, vk: Vec<DirEntry>) {

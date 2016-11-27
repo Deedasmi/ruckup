@@ -9,23 +9,25 @@ appenders:
   log:
     kind: file
     path: "log/ruckup.log"
+    encoder:
+      pattern: "{d} {l} {t} {T} - {m} {n}"
   lib:
     kind: file
     path: "log/lib.log"
     encoder:
       pattern: "{d} - {m}{n}"
 root:
-  level: info
+  level: debug
   appenders:
     - stdout
 loggers:
   print:
-    level: info
+    level: debug
     appenders:
       - print
     additive: false
   print::important:
-    level: info
+    level: debug
     appenders:
       - log
   lib:
