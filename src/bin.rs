@@ -139,77 +139,48 @@ fn main() {
 
         // Build walkdir iterator
         let all_files = get_file_vector(&src_locs);
-        let total_files = all_files.clone().into_iter().count();
-        debug!(target: "print", "{} files found", total_files);
-        let mut num_files: u64 = 0;
-        let mut enc_files: u64 = 0;
-
+        let total_files = all_files.len();
         info!(target: "print::important", "Starting encryption!");
         // Build encrypter iterator
-        for entry in all_files.into_iter() {
+        let changed_files = get_changed_files(all_files, &dir_map);
+        let enc_files = changed_files.len();
+        for entry in changed_files.into_iter() {
             let temp_store = temp_store.clone(); // Would be more effecient as an arc
             let md = entry.metadata().unwrap();
             let tx = tx.clone();
-            if md.is_file() {
-                num_files += 1;
-                let ps =
-                    entry.path().to_str().expect("Unable to convert file_path to &str").to_owned();
-                if let Some(fr) = dir_map.get_latest_modified(&ps) {
-                    if md.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs() == fr {
-                        debug!("File {} hasn't changed since last backup", &ps);
-                        continue;
-                    }
-                }
-                create_enc_folder(&temp_store, file_num)
-                    .expect("Unable to create temporary encrypted file!");
-                let p = PathBuf::from(&ps);
-                let key = key.clone();
-                pool.execute(move || {
-                    info!(target: "print::important", "Encrypting file {} to {}", &ps, file_num);
-                    encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num));
-                    debug!(target: "print::important", "Finished encrypting {}", file_num);
-                    tx.send((ps, entry.clone(), file_num)).unwrap();
-                });
-                file_num += 1;
-                enc_files += 1;
-            }
+            create_enc_folder(&temp_store, file_num)
+                .expect("Unable to create temporary encrypted file!");
+            let p = PathBuf::from(&entry.path());
+            let key = key.clone();
+            pool.execute(move || {
+                info!(target: "print::important", "Encrypting file {:?} to {}", &p, file_num);
+                encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num));
+                debug!(target: "print::important", "Finished encrypting {}", file_num);
+                tx.send((p, entry.clone(), file_num)).unwrap();
+            });
+            file_num += 1
         }
 
         // Take and encrypt files
         for x in 0..enc_files {
             let (p, e, num) = rx.recv().unwrap();
+            let p = p.to_str().unwrap().to_owned();
             let _ = dir_map.insert(&p, &e, num);
             debug!(target: "print::important", "Added {} to the dirmap", p);
         }
         prefmap.insert("file_num".into(), json::encode(&file_num).unwrap());
-        info!(target: "print::imporant", "Found {} folders and {} files. Encrypted {} files in {} seconds.", total_files as u64 - num_files,
-            num_files, enc_files, now.elapsed().unwrap().as_secs());
+        info!(target: "print::imporant", "Found {} folders/files. Encrypted {} files in {} seconds.",
+            total_files, enc_files, now.elapsed().unwrap().as_secs());
     }
 
     if matches.is_present("scan") {
         let now = SystemTime::now();
         // Build walkdir iterator
         let all_files = get_file_vector(&src_locs);
-        let total_files = all_files.clone().into_iter().count();
-        let mut need_backup: u64 = 0;
-        let mut num_files: u64 = 0;
+        let total_files = all_files.len();
         debug!(target: "print", "{} files found", total_files);
-        for entry in all_files.into_iter() {
-            let md = entry.metadata().unwrap();
-            if md.is_file() {
-                num_files += 1;
-                let p =
-                    entry.path().to_str().expect("Unable to convert file_path to &str").to_owned();
-                if let Some(fr) = dir_map.get_latest_modified(&p) {
-                    if md.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs() != fr {
-                        need_backup += 1;
-                    }
-                } else {
-                    need_backup += 1;
-                }
-            }
-        }
-        info!(target: "print::imporant", "Found {} files, {} of which need backed up. Took {} seconds.", num_files, need_backup, now.elapsed().unwrap().as_secs());
+        let changed = get_changed_files(all_files, &dir_map);
+        info!(target: "print::imporant", "Found {} files/folders, {} of which need backed up. Took {} seconds.", total_files, changed.len(), now.elapsed().unwrap().as_secs());
     }
 
     if matches.is_present("recover_all") {

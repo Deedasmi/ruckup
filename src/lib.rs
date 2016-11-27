@@ -178,6 +178,24 @@ pub fn get_file_vector(src_locs: &Vec<PathBuf>) -> Vec<DirEntry> {
     hashable_dirs.into_iter().map(|x| x.dir).collect()
 }
 
+pub fn get_changed_files(files: Vec<DirEntry>, dir_map: &MetaTable) -> Vec<DirEntry> {
+    let mut nv: Vec<DirEntry> = Vec::new();
+    for entry in files.into_iter() {
+        let md = entry.metadata().unwrap();
+        if md.is_file() {
+            let p = entry.path().to_str().expect("Unable to convert file_path to &str").to_owned();
+            if let Some(fr) = dir_map.get_latest_modified(&p) {
+                if md.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs() != fr {
+                    nv.push(entry);
+                }
+            } else {
+                nv.push(entry);
+            }
+        }
+    }
+    nv
+}
+
 /// Struct for recording files that are walked into a serilazable format
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug)]
 pub struct FileRecord {
