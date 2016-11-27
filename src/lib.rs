@@ -327,6 +327,18 @@ impl MetaTable {
             self.records.remove(&i.path().to_str().unwrap().to_owned());
         }
     }
+    /// Finds and return a FileRecord matching a given file_number
+    pub fn find_record(&self, num: u64) -> Option<&FileRecord> {
+        let mut fr: Option<&FileRecord> = None;
+        for v in self.values() {
+            for e in v.into_iter() {
+                if e.file_num == num {
+                    fr = Some(e)
+                }
+            }
+        }
+        fr
+    }
 }
 
 /// This is a really dumb struct to make DirEntry hashable

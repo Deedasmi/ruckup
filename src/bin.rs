@@ -195,24 +195,7 @@ fn main() {
             }
             for e in nv.into_iter() {
                 let (temp_store, key, tx) = clone_three(&temp_store, &key, &tx);
-                let path = match prepend {
-                    Some(expr) => {
-                        let mut floc = PathBuf::from(expr);
-                        if !floc.is_absolute() {
-                            panic!("Recovery path much be absolute!");
-                        }
-                        let mut c = e.src.components();
-                        match c.next().unwrap() {
-                            std::path::Component::Prefix(_) => {
-                                c.next();
-                            }
-                            _ => (),
-                        }
-                        floc.push(c.as_path());
-                        floc
-                    }
-                    None => e.src.to_owned(),
-                };
+                let path = join_path(prepend, &e.src).expect("Recovery path must be absolute!");
                 pool.execute(move || {
                 info!(target: "print::important", "Decrypting file {:?} to {:?}", enc_file(&temp_store, e.file_num), path);
                 restore_file(&key, enc_file(&temp_store, e.file_num), &path);
@@ -225,6 +208,21 @@ fn main() {
                 debug!(target: "print::important", "Decrypted {:?}", src);
             }
             info!(target: "print::imporatnt", "Recovered {} files in {} seconds", dir_map.len(), now.elapsed().unwrap().as_secs());
+        } else {
+
+        }
+    }
+
+    if let Some(num) = matches.value_of("one_file") {
+        if matches.is_present("overwrite") || matches.is_present("recover_to") {
+            let prepend = matches.value_of("recover_to");
+            let fnum = num.parse::<u64>().expect("File number must be a positive number!");
+            let fr = dir_map.find_record(fnum)
+                .expect(&format!("No record found with file_num {}", fnum));
+            let path = join_path(prepend, &fr.src).expect("Recovery path must be absolute!");
+            info!(target: "print::important", "Decrypting file {:?} to {:?}", enc_file(&temp_store, fr.file_num), path);
+            restore_file(&key, enc_file(&temp_store, fr.file_num), &path);
+            debug!(target: "print::important", "Finished decrypting file {}", fr.file_num);
         } else {
             panic!("Must specify backup location! Either -o or -r $PATH");
         }
@@ -288,4 +286,26 @@ fn restore_file(key: &secretbox::Key, enc_file: PathBuf, recover_path: &PathBuf)
 
 fn clone_three<T: Clone, U: Clone, V: Clone>(t: &T, u: &U, v: &V) -> (T, U, V) {
     (t.clone(), u.clone(), v.clone())
+}
+
+fn join_path(loc: Option<&str>, p: &PathBuf) -> Result<PathBuf, ()> {
+    let p = match loc {
+        Some(expr) => {
+            let mut floc = PathBuf::from(expr);
+            if !floc.is_absolute() {
+                ()
+            }
+            let mut c = p.components();
+            match c.next().unwrap() {
+                std::path::Component::Prefix(_) => {
+                    c.next();
+                }
+                _ => (),
+            }
+            floc.push(c.as_path());
+            Ok(floc)
+        }
+        None => Ok(p.to_owned()),
+    };
+    p
 }
