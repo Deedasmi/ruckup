@@ -17,17 +17,17 @@ appenders:
     encoder:
       pattern: "{d} - {m}{n}"
 root:
-  level: debug
+  level: info
   appenders:
     - stdout
 loggers:
   print:
-    level: debug
+    level: info
     appenders:
       - print
     additive: false
   print::important:
-    level: debug
+    level: info
     appenders:
       - log
   lib:

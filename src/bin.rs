@@ -183,52 +183,56 @@ fn main() {
     }
 
     // Both bulk recovery options
-    if matches.is_present("recover_all") || matches.is_present("recover_to") {
-        let prepend = matches.value_of("recover_to");
-        let now = SystemTime::now();
-        let (tx, rx) = channel();
-        // Some weird interaction with the move closure meant I needed to change how the loop worked
-        let mut nv: Vec<lib::FileRecord> = Vec::new();
-        for e in dir_map.values() {
-            nv.push(e.back().unwrap().clone());
-        }
-        for e in nv.into_iter() {
-            let (temp_store, key, tx) = clone_three(&temp_store, &key, &tx);
-            let path = match prepend {
-                Some(expr) => {
-                    let mut floc = PathBuf::from(expr);
-                    if !floc.is_absolute() {
-                        panic!("Recovery path much be absolute!");
-                    }
-                    let mut c = e.src.components();
-                    match c.next().unwrap() {
-                        std::path::Component::Prefix(_) => {
-                            c.next();
+    if matches.is_present("recover_all") {
+        if matches.is_present("overwrite") || matches.is_present("recover_to") {
+            let prepend = matches.value_of("recover_to");
+            let now = SystemTime::now();
+            let (tx, rx) = channel();
+            // Some weird interaction with the move closure meant I needed to change how the loop worked
+            let mut nv: Vec<lib::FileRecord> = Vec::new();
+            for e in dir_map.values() {
+                nv.push(e.back().unwrap().clone());
+            }
+            for e in nv.into_iter() {
+                let (temp_store, key, tx) = clone_three(&temp_store, &key, &tx);
+                let path = match prepend {
+                    Some(expr) => {
+                        let mut floc = PathBuf::from(expr);
+                        if !floc.is_absolute() {
+                            panic!("Recovery path much be absolute!");
                         }
-                        _ => (),
+                        let mut c = e.src.components();
+                        match c.next().unwrap() {
+                            std::path::Component::Prefix(_) => {
+                                c.next();
+                            }
+                            _ => (),
+                        }
+                        floc.push(c.as_path());
+                        floc
                     }
-                    floc.push(c.as_path());
-                    floc
-                }
-                None => e.src.to_owned(),
-            };
-            pool.execute(move || {
+                    None => e.src.to_owned(),
+                };
+                pool.execute(move || {
                 info!(target: "print::important", "Decrypting file {:?} to {:?}", enc_file(&temp_store, e.file_num), path);
                 restore_file(&key, enc_file(&temp_store, e.file_num), &path);
                 debug!(target: "print::important", "Finished decrypting file {}", e.file_num);
                 tx.send(path).unwrap();
             });
+            }
+            for x in 0..dir_map.len() {
+                let src = rx.recv().unwrap();
+                debug!(target: "print::important", "Decrypted {:?}", src);
+            }
+            info!(target: "print::imporatnt", "Recovered {} files in {} seconds", dir_map.len(), now.elapsed().unwrap().as_secs());
+        } else {
+            panic!("Must specify backup location! Either -o or -r $PATH");
         }
-        for x in 0..dir_map.len() {
-            let src = rx.recv().unwrap();
-            debug!(target: "print::important", "Decrypted {:?}", src);
-        }
-        info!(target: "print::imporatnt", "Recovered {} files in {} seconds", dir_map.len(), now.elapsed().unwrap().as_secs());
     }
 
     // Finds files
     if let Some(findir) = matches.value_of("files") {
-        for (k, v) in dir_map.iter().filter(|v| v.0.starts_with(findir)) {
+        for (_, v) in dir_map.iter().filter(|v| v.0.starts_with(findir)) {
             for e in v.into_iter() {
                 println!("{}", e);
             }

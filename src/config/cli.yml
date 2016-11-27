@@ -22,7 +22,11 @@ args:
         conflicts_with: scan
     - recover_all:
         long: recover_all
-        help: "Recovers all files to their original location WARNING: This replaces all existing files"
+        help: "Recovers all files to their original location"
+    - overwrite:
+        short: o
+        long: overwrite
+        help: "Recovers files to the original location, overwriting any existing files"
         conflicts_with: recover_to
     - recover_to:
         short: r
@@ -30,7 +34,7 @@ args:
         value_name: FILEPATH
         help: Recovers all files to the specified destination.
         takes_value: true
-        conflicts_with: recover_all
+        conflicts_with: overwrite
     - no_recover_meta:
         long: no-meta
         help: "Skips recovering of the meta_data table. WARNING: All encrypted data will be lost."
@@ -51,4 +55,10 @@ args:
         long: files
         help: "Returns a list of all files that belong to a given path"
         value_name: FOLDERPATH
+        takes_value: true
+    - one_file:
+        short: l
+        long: one_file
+        help: Recovers a specific file version
+        value_name: FILE_NUM
         takes_value: true
