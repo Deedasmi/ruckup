@@ -288,7 +288,7 @@ impl MetaTable {
         MetaTable { records: HashMap::new() }
     }
     /// Inserts a record into the underlying HashMap
-    /// Returns the inserted FileRecord
+    /// Returns a reference to the inserted FileRecord
     pub fn insert(&mut self, k: &String, v: &DirEntry, dest: u64) -> &FileRecord {
         let nv = FileRecord::new(v, dest);
         if self.records.contains_key(k) {
@@ -311,8 +311,11 @@ impl MetaTable {
     pub fn contains_key(&self, k: &String) -> bool {
         self.records.contains_key(k)
     }
+    /// Gets the last recorded modified time for a file
     pub fn get_latest_modified(&self, k: &String) -> Option<DateTime<Local>> {
-        self.records.get(k).map(|x| x.back().expect("Queue was empty somehow {}, k").last_modified)
+        self.records
+            .get(k)
+            .map(|x| x.back().expect(&format!("Queue was empty somehow {}", k)).last_modified)
     }
     pub fn len(&self) -> usize {
         self.records.len()
@@ -320,7 +323,7 @@ impl MetaTable {
     pub fn iter(&self) -> Iter<String, VecDeque<FileRecord>> {
         self.records.iter()
     }
-    /// Takes a directory of DirEntry (likely generated with get_file_vector) and removed all files from the metadata table
+    /// Takes a directory of DirEntry (likely generated with get_file_vector) and removes all files from the metadata table
     pub fn remove(&mut self, vk: Vec<DirEntry>) {
         for i in vk.into_iter() {
             info!(target: "lib", "Removing {:?}", i.path());

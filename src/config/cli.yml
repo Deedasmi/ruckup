@@ -1,5 +1,5 @@
 name: ruckup
-version: "0.0.2"
+version: "0.0.5"
 author: Richard P. <rap1011@ksu.edu>
 about: Stupid backup system. Very much broken currently. Use at your own risk
 args:

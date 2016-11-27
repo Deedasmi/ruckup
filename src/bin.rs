@@ -34,7 +34,6 @@ lazy_static! {
     x };
 }
 
-#[allow(unused_variables)]
 fn main() {
     println!("Welcome to Ruckup! Loading settings...");
     log4rs::init_file("src/config/log_config.yml", Default::default()).unwrap();
@@ -145,7 +144,6 @@ fn main() {
         let changed_files = get_changed_files(all_files, &dir_map);
         let enc_files = changed_files.len();
         for entry in changed_files.into_iter() {
-            let md = entry.metadata().unwrap();
             let (temp_store, key, tx) = clone_three(&temp_store, &key, &tx);
             create_enc_folder(&temp_store, file_num)
                 .expect("Unable to create temporary encrypted file!");
@@ -161,7 +159,7 @@ fn main() {
         }
 
         // Take and encrypt files
-        for x in 0..enc_files {
+        for _ in 0..enc_files {
             let (p, e, num) = rx.recv().unwrap();
             let p = p.to_str().unwrap().to_owned();
             let _ = dir_map.insert(&p, &e, num);
@@ -203,7 +201,7 @@ fn main() {
                 tx.send(path).unwrap();
             });
             }
-            for x in 0..dir_map.len() {
+            for _ in 0..dir_map.len() {
                 let src = rx.recv().unwrap();
                 debug!(target: "print::important", "Decrypted {:?}", src);
             }

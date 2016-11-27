@@ -1,6 +1,6 @@
 [package]
 name = "ruckup"
-version = "0.0.2"
+version = "0.0.5"
 authors = ["Richard Petrie <rap1011@ksu.edu>"]
 
 [lib]
