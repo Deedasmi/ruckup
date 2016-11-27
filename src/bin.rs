@@ -187,6 +187,7 @@ fn main() {
         let prepend = matches.value_of("recover_to");
         let now = SystemTime::now();
         let (tx, rx) = channel();
+        // Some weird interaction with the move closure meant I needed to change how the loop worked
         let mut nv: Vec<lib::FileRecord> = Vec::new();
         for e in dir_map.values() {
             nv.push(e.back().unwrap().clone());
@@ -223,6 +224,15 @@ fn main() {
             debug!(target: "print::important", "Decrypted {:?}", src);
         }
         info!(target: "print::imporatnt", "Recovered {} files in {} seconds", dir_map.len(), now.elapsed().unwrap().as_secs());
+    }
+
+    // Finds files
+    if let Some(findir) = matches.value_of("files") {
+        for (k, v) in dir_map.iter().filter(|v| v.0.starts_with(findir)) {
+            for e in v.into_iter() {
+                println!("{}", e);
+            }
+        }
     }
 
     // Save meta data

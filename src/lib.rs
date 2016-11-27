@@ -4,19 +4,22 @@ extern crate rust_sodium;
 extern crate rustc_serialize;
 extern crate walkdir;
 extern crate itertools;
+extern crate chrono;
 #[macro_use]
 extern crate log;
 pub use rust_sodium::crypto::secretbox;
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use std::fs::{File, OpenOptions, metadata, remove_file, create_dir_all};
+use std::fs::{File, OpenOptions, metadata, remove_file, create_dir_all, Metadata};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 pub use std::time::UNIX_EPOCH;
 pub use walkdir::{WalkDir, DirEntry};
 use itertools::Itertools;
-use std::collections::{HashMap, VecDeque};
-use std::collections::hash_map::Values;
+use std::collections::VecDeque;
+use std::collections::hash_map::*;
+use chrono::{NaiveDateTime, DateTime};
+use chrono::offset::local::Local;
 
 const CHUNK_SIZE: u64 = 4096000;
 const CIPHER_SIZE: u64 = CHUNK_SIZE + (secretbox::MACBYTES as u64);
@@ -185,7 +188,7 @@ pub fn get_changed_files(files: Vec<DirEntry>, dir_map: &MetaTable) -> Vec<DirEn
         if md.is_file() {
             let p = entry.path().to_str().expect("Unable to convert file_path to &str").to_owned();
             if let Some(fr) = dir_map.get_latest_modified(&p) {
-                if md.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs() != fr {
+                if system_to_datetime(md) != fr {
                     nv.push(entry);
                 }
             } else {
@@ -196,13 +199,24 @@ pub fn get_changed_files(files: Vec<DirEntry>, dir_map: &MetaTable) -> Vec<DirEn
     nv
 }
 
+pub fn system_to_datetime(s: Metadata) -> DateTime<Local> {
+    let n =
+        NaiveDateTime::from_timestamp(s.modified()
+                                          .unwrap()
+                                          .duration_since(UNIX_EPOCH)
+                                          .unwrap()
+                                          .as_secs() as i64,
+                                      0);
+    let dtl = Local::now();
+    DateTime::from_utc(n, dtl.offset().clone())
+}
+
 /// Struct for recording files that are walked into a serilazable format
 #[derive(RustcDecodable, RustcEncodable, PartialEq, Eq, Debug, Clone)]
 pub struct FileRecord {
     pub src: PathBuf,
     pub file_num: u64,
-    pub last_modified: u64,
-    enc_hash: Option<String>,
+    pub last_modified: DateTime<Local>,
 }
 
 impl Hash for FileRecord {
@@ -214,19 +228,18 @@ impl Hash for FileRecord {
 impl FileRecord {
     /// Generates a new FileRecord from a file and a destination path
     pub fn new(file: &DirEntry, file_num: u64) -> FileRecord {
-        let t = file.metadata()
-            .unwrap()
-            .modified()
-            .unwrap()
-            .duration_since(UNIX_EPOCH)
-            .map(|x| x.as_secs())
-            .unwrap();
+        let t = system_to_datetime(file.metadata().unwrap());
         FileRecord {
             src: file.path().to_path_buf(),
             file_num: file_num,
             last_modified: t,
-            enc_hash: None,
         }
+    }
+}
+
+impl std::fmt::Display for FileRecord {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}: {} - {}", self.src.to_str().unwrap(), self.file_num, self.last_modified)
     }
 }
 
@@ -298,11 +311,14 @@ impl MetaTable {
     pub fn contains_key(&self, k: &String) -> bool {
         self.records.contains_key(k)
     }
-    pub fn get_latest_modified(&self, k: &String) -> Option<u64> {
+    pub fn get_latest_modified(&self, k: &String) -> Option<DateTime<Local>> {
         self.records.get(k).map(|x| x.back().expect("Queue was empty somehow {}, k").last_modified)
     }
     pub fn len(&self) -> usize {
         self.records.len()
+    }
+    pub fn iter(&self) -> Iter<String, VecDeque<FileRecord>> {
+        self.records.iter()
     }
     /// Takes a directory of DirEntry (likely generated with get_file_vector) and removed all files from the metadata table
     pub fn remove(&mut self, vk: Vec<DirEntry>) {
