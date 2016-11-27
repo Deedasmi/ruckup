@@ -4,6 +4,7 @@ extern crate preferences;
 extern crate rustc_serialize;
 extern crate app_dirs;
 extern crate lib;
+extern crate threadpool;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
@@ -18,6 +19,9 @@ use std::fs::{File, create_dir_all};
 use std::io::{Read, Write};
 use std::time::SystemTime;
 use lib::*;
+use std::sync::Arc;
+use threadpool::ThreadPool;
+use std::sync::mpsc::channel;
 
 const PREFLOC: &'static str = "preferences/ruckup";
 const APP_INFO: AppInfo = AppInfo {
@@ -58,6 +62,7 @@ fn main() {
             k
         });
     debug!("Found key {:?}", key);
+    let key = Arc::new(key);
 
     // Load src folders
     let mut src_locs: Vec<PathBuf> =
@@ -74,6 +79,9 @@ fn main() {
     let mut file_num: u64 =
         prefmap.get("file_num".into()).and_then(|x| json::decode(x).ok()).unwrap_or(0);
     debug!(target: "print", "Found file_num {}", &file_num);
+
+    // Set up threadpool
+    let pool = ThreadPool::new_with_name(String::from("ThreadPool"), 4);
 
     // Argument parsing
     // Parse -ts
@@ -125,7 +133,10 @@ fn main() {
 
     // Encrypt all src_locs into the temporary store
     if matches.is_present("encrypt") {
+        // Preperation
         let now = SystemTime::now();
+        let (tx, rx) = channel();
+
         // Build walkdir iterator
         let all_files = get_file_vector(&src_locs);
         let total_files = all_files.clone().into_iter().count();
@@ -136,28 +147,39 @@ fn main() {
         info!(target: "print::important", "Starting encryption!");
         // Build encrypter iterator
         for entry in all_files.into_iter() {
+            let temp_store = temp_store.clone(); // Would be more effecient as an arc
             let md = entry.metadata().unwrap();
+            let tx = tx.clone();
             if md.is_file() {
                 num_files += 1;
-                let p =
+                let ps =
                     entry.path().to_str().expect("Unable to convert file_path to &str").to_owned();
-                if let Some(fr) = dir_map.get_latest_modified(&p) {
+                if let Some(fr) = dir_map.get_latest_modified(&ps) {
                     if md.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs() == fr {
-                        debug!("File {} hasn't changed since last backup", &p);
+                        debug!("File {} hasn't changed since last backup", &ps);
                         continue;
                     }
                 }
-                let _ = dir_map.insert(&p, &entry, file_num);
                 create_enc_folder(&temp_store, file_num)
                     .expect("Unable to create temporary encrypted file!");
-                let p = PathBuf::from(&p);
-                encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num));
+                let p = PathBuf::from(&ps);
+                let key = key.clone();
+                pool.execute(move || {
+                    info!(target: "print::important", "Encrypting file {} to {}", &ps, file_num);
+                    encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num));
+                    debug!(target: "print::important", "Finished encrypting {}", file_num);
+                    tx.send((ps, entry.clone(), file_num)).unwrap();
+                });
                 file_num += 1;
                 enc_files += 1;
-                if enc_files % 100 == 0 {
-                    info!(target: "print", "{} files completed", enc_files);
-                }
             }
+        }
+
+        // Take and encrypt files
+        for x in 0..enc_files {
+            let (p, e, num) = rx.recv().unwrap();
+            let _ = dir_map.insert(&p, &e, num);
+            debug!(target: "print::important", "Added {} to the dirmap", p);
         }
         prefmap.insert("file_num".into(), json::encode(&file_num).unwrap());
         info!(target: "print::imporant", "Found {} folders and {} files. Encrypted {} files in {} seconds.", total_files as u64 - num_files,
