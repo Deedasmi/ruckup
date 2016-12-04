@@ -35,7 +35,6 @@ lazy_static! {
 }
 
 fn main() {
-    println!("Welcome to Ruckup! Loading settings...");
     log4rs::init_file("src/config/log_config.yml", Default::default()).unwrap();
     debug!("Logger loaded");
     debug!("META_LOC set {:?}", *META_LOC);
@@ -44,6 +43,8 @@ fn main() {
     // Parse cli arguments
     let yaml = load_yaml!("config/cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
+
+    println!("Welcome to Ruckup! Loading settings...");
 
     // Load preferences
     let mut prefmap = PreferencesMap::<String>::load(&APP_INFO, &PREFLOC)
@@ -150,20 +151,24 @@ fn main() {
             let p = PathBuf::from(&entry.path());
             let key = key.clone();
             pool.execute(move || {
-                info!(target: "print::important", "Encrypting file {:?} to {}", &p, file_num);
+                info!(target: "log", "Encrypting file {:?} to {}", &p, file_num);
                 encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num));
                 tx.send((p, entry.clone(), file_num)).unwrap();
-                debug!(target: "print::important", "Finished encrypting {}", file_num);
+                debug!(target: "log", "Finished encrypting {}", file_num);
             });
             file_num += 1
         }
-
+        let mut enc: u64 = 0;
         // Take and encrypt files
         for _ in 0..enc_files {
             let (p, e, num) = rx.recv().unwrap();
             let p = p.to_str().unwrap().to_owned();
             let _ = dir_map.insert(&p, &e, num);
             debug!(target: "print::important", "Added {} to the dirmap", p);
+            enc += 1;
+            if enc % 100 == 0 {
+                info!(target: "print", "{} files encrypted. {} remaining.", enc, enc_files as u64 - enc);
+            }
         }
         prefmap.insert("file_num".into(), json::encode(&file_num).unwrap());
         info!(target: "print::imporant", "Found {} folders/files. Encrypted {} files in {} seconds.",

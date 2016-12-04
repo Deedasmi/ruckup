@@ -1,7 +1,7 @@
-name: ruckup
+name: Ruckup
 version: "0.0.5"
 author: Richard P. <rap1011@ksu.edu>
-about: Stupid backup system. Very much broken currently. Use at your own risk
+about: Zero knowledge backup system written in Rust.
 args:
     - temporary_storage:
         short: t
@@ -22,7 +22,7 @@ args:
         conflicts_with: scan
     - recover_all:
         long: recover_all
-        help: "Recovers all files to their original location"
+        help: "Recovers the latest version of all backed up files"
     - overwrite:
         short: o
         long: overwrite
@@ -32,7 +32,7 @@ args:
         short: r
         long: recover_to
         value_name: FILEPATH
-        help: Recovers all files to the specified destination.
+        help: Recovers files to the specified destination.
         takes_value: true
         conflicts_with: overwrite
     - no_recover_meta:
@@ -41,7 +41,7 @@ args:
     - scan:
         short: s
         long: scan
-        help: Scans for files that need to be backe dup
+        help: Scans for files that need to be backed up
         conflicts_with: encrypt
     - remove:
         short: d
@@ -54,7 +54,7 @@ args:
         short: f
         long: files
         help: "Returns a list of all files that belong to a given path"
-        value_name: FOLDERPATH
+        value_name: FILEPATH
         takes_value: true
     - one_file:
         short: l

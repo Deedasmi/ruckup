@@ -30,6 +30,11 @@ loggers:
     level: info
     appenders:
       - log
+  log:
+    level: info
+    appenders:
+      - log
+    additive: false
   lib:
     level: debug
     appenders:
