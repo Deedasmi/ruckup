@@ -247,9 +247,9 @@ impl std::fmt::Display for FileRecord {
 /// # Example
 /// ```
 /// use std::path::PathBuf;
-/// let t = PathBuf::from("d:\\");
+/// let t = PathBuf::from("d:/");
 /// let num: u64 = 1263472;
-/// assert_eq!(lib::enc_folder(&t, num), PathBuf::from("d:\\1\\263\\"));
+/// assert_eq!(lib::enc_folder(&t, num), PathBuf::from("d:/1/263/"));
 /// ```
 pub fn enc_folder(ts: &PathBuf, num: u64) -> PathBuf {
     let mut fp = ts.clone();
@@ -262,9 +262,9 @@ pub fn enc_folder(ts: &PathBuf, num: u64) -> PathBuf {
 /// # Example
 /// ```
 /// use std::path::PathBuf;
-/// let t = PathBuf::from("d:\\");
+/// let t = PathBuf::from("//home/");
 /// let num: u64 = 1263472;
-/// assert_eq!(lib::enc_file(&t, num), PathBuf::from("d:\\1\\263\\472"));
+/// assert_eq!(lib::enc_file(&t, num), PathBuf::from("//home/1/263/472"));
 /// ```
 pub fn enc_file(ts: &PathBuf, num: u64) -> PathBuf {
     let mut fp = enc_folder(&ts, num);
