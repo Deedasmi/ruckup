@@ -5,7 +5,7 @@ authors = ["Richard Petrie <rap1011@ksu.edu>"]
 
 [lib]
 name = "lib"
-path = "src/lib.rs"
+path = "src/lib/mod.rs"
 
 [[bin]]
 name = "ruckup"

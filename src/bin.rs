@@ -18,7 +18,8 @@ use std::path::PathBuf;
 use std::fs::{File, create_dir_all};
 use std::io::{Read, Write};
 use std::time::SystemTime;
-use lib::*;
+use lib::crypto::*;
+use lib::lib::*;
 use std::sync::Arc;
 use threadpool::ThreadPool;
 use std::sync::mpsc::channel;
@@ -192,7 +193,7 @@ fn main() {
             let now = SystemTime::now();
             let (tx, rx) = channel();
             // Some weird interaction with the move closure meant I needed to change how the loop worked
-            let mut nv: Vec<lib::FileRecord> = Vec::new();
+            let mut nv: Vec<FileRecord> = Vec::new();
             for e in dir_map.values() {
                 nv.push(e.back().unwrap().clone());
             }
