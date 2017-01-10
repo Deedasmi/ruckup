@@ -1,3 +1,4 @@
+//! This library will be for all crypto related functions within Ruckup.
 pub use rust_sodium::crypto::secretbox;
 use std::path::PathBuf;
 use super::*;

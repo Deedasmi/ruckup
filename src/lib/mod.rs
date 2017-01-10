@@ -1,3 +1,5 @@
+//! This crate acts as a back-end library for Ruckup. All interface style i/o and
+//! supporting functions should go into the binary crate.
 extern crate rust_sodium;
 extern crate rustc_serialize;
 extern crate walkdir;

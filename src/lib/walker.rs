@@ -1,3 +1,6 @@
+//! This module focuses on generating a unique list of files and folders within
+//! a user-given set of folders. Will eventually need to fully wrap walkdir-rs
+//! and provide re-exports of important objects
 extern crate itertools;
 
 use std::hash::{Hash, Hasher};

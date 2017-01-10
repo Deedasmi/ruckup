@@ -1,5 +1,4 @@
-//! General library for use in libsodium
-//! Will likely be broken out to multiple modules later
+//! This is a generalized library module for use within binary and other modules
 use std;
 use std::io::prelude::*;
 use std::io::SeekFrom;
