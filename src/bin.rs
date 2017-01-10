@@ -20,6 +20,7 @@ use std::io::{Read, Write};
 use std::time::SystemTime;
 use lib::crypto::*;
 use lib::lib::*;
+use lib::walker::*;
 use std::sync::Arc;
 use threadpool::ThreadPool;
 use std::sync::mpsc::channel;
