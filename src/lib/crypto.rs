@@ -3,6 +3,7 @@ pub use rust_sodium::crypto::secretbox;
 use std::path::PathBuf;
 use super::*;
 use std::fs::{remove_file, File};
+use errors::*;
 
 /// Encrypts a file with a given key, writing output to new file
 ///
@@ -10,13 +11,17 @@ use std::fs::{remove_file, File};
 /// Subject to changes. Known TODOs:
 ///
 /// * Instead of taking a file name, take a proper Path object or file pointer
-pub fn encrypt_f2f(key: &secretbox::Key, src_filename: &PathBuf, dest_filename: &PathBuf) {
+pub fn encrypt_f2f(key: &secretbox::Key,
+                   src_filename: &PathBuf,
+                   dest_filename: &PathBuf)
+                   -> Result<()> {
 
     remove_file(dest_filename).ok();
 
     // Get nonce
     let mut nonce = secretbox::gen_nonce();
-    lib::write_data(dest_filename, &nonce[..]);
+    lib::write_data(dest_filename, &nonce[..]).chain_err(|| format!("Failed adding nonce for {:?} to file",
+                        src_filename))?;
 
     // Get file size
     let mut r: u64 = 0;
@@ -27,10 +32,14 @@ pub fn encrypt_f2f(key: &secretbox::Key, src_filename: &PathBuf, dest_filename: 
         let plaintext = lib::read_data(src_filename, r * CHUNK_SIZE, CHUNK_SIZE);
         let ciphertext = encrypt(&plaintext[..], &nonce, &key);
         // Write cipher size instead of plaintext size
-        lib::write_data(dest_filename, &ciphertext);
+        lib::write_data(dest_filename, &ciphertext).chain_err(|| {
+                format!("Failed writing encrypted data from {:?} to file",
+                        src_filename)
+            })?;
         r += 1;
         nonce = nonce.increment_le();
     }
+    Ok(())
 }
 
 /// Decrypts a given file with a given nonce and key, and saves that to a file
@@ -40,7 +49,10 @@ pub fn encrypt_f2f(key: &secretbox::Key, src_filename: &PathBuf, dest_filename: 
 ///
 /// * Instead of reading from file, 'stream' from buffer.
 /// * Instead of taking a file name, take a proper Path object or file pointer
-pub fn decrypt_f2f(key: &secretbox::Key, src_filename: &PathBuf, dest_filename: &PathBuf) {
+pub fn decrypt_f2f(key: &secretbox::Key,
+                   src_filename: &PathBuf,
+                   dest_filename: &PathBuf)
+                   -> Result<()> {
 
     // Find a better way to do this
     remove_file(dest_filename).ok();
@@ -59,10 +71,12 @@ pub fn decrypt_f2f(key: &secretbox::Key, src_filename: &PathBuf, dest_filename: 
                                         CIPHER_SIZE * r + secretbox::NONCEBYTES as u64,
                                         CIPHER_SIZE);
         let their_plaintext = decrypt(&ciphertext[..], &nonce, &key);
-        lib::write_data(dest_filename, &their_plaintext[..]);
+        lib::write_data(dest_filename, &their_plaintext[..])
+            .chain_err(|| "Failed writing decrypted text to file")?;
         r += 1;
         nonce = nonce.increment_le();
     }
+    Ok(())
 }
 
 /// Decrypts a given file with a given key into a string

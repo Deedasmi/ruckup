@@ -24,3 +24,4 @@ log4rs = "0.5.2"
 lazy_static = "0.2.1"
 threadpool = "1.0"
 chrono = { version = "0.2", features = ["rustc-serialize"] }
+error-chain = "0.7.2"

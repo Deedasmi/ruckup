@@ -11,6 +11,7 @@ use walkdir::DirEntry;
 use std::collections::hash_map::*;
 use chrono::{NaiveDateTime, DateTime};
 use chrono::offset::local::Local;
+use errors::*;
 
 /// Helper function to find size of file.
 pub fn get_file_size(filename: &PathBuf) -> u64 {
@@ -43,13 +44,13 @@ pub fn read_data(filename: &PathBuf, offset: u64, limit: u64) -> Vec<u8> {
 /// TODO:
 /// * Chunk files for mid-file resumption
 /// * Safely handle file writing
-pub fn write_data(filename: &PathBuf, data: &[u8]) {
-    let mut f = OpenOptions::new()
-        .append(true)
+pub fn write_data(filename: &PathBuf, data: &[u8]) -> Result<()> {
+    let mut f = OpenOptions::new().append(true)
         .create(true)
         .open(filename)
-        .expect(&format!("Failed to open or create file {:?}", filename));
-    f.write_all(data).unwrap();
+        .chain_err(|| format!("Failed to open or create file {:?}", filename))?;
+    f.write_all(data).chain_err(|| format!("Failed writing to file"))?;
+    Ok(())
 }
 
 pub fn system_to_datetime(s: Metadata) -> DateTime<Local> {

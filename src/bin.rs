@@ -21,6 +21,7 @@ use std::time::SystemTime;
 use lib::crypto::*;
 use lib::lib::*;
 use lib::walker::*;
+use lib::errors::*;
 use std::sync::Arc;
 use threadpool::ThreadPool;
 use std::sync::mpsc::channel;
@@ -154,7 +155,7 @@ fn main() {
             let key = key.clone();
             pool.execute(move || {
                 info!(target: "log", "Encrypting file {:?} to {}", &p, file_num);
-                encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num));
+                error(encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num)));
                 tx.send((p, entry.clone(), file_num)).unwrap();
                 debug!(target: "log", "Finished encrypting {}", file_num);
             });
@@ -246,7 +247,7 @@ fn main() {
     let mut f = File::create(&*META_LOC).expect("Failed to open meta_data for saving");
     f.write_all(&json::encode(&dir_map).expect("Failed to encode hashmap").as_bytes()).unwrap();
     debug!(target: "print", "Encrypting meta-data table...");
-    encrypt_f2f(&key, &*META_LOC, &enc_file(&temp_store, file_num));
+    error(encrypt_f2f(&key, &*META_LOC, &enc_file(&temp_store, file_num)));
     debug!(target: "print", "Encryption complete!");
 
     // Save preferences
@@ -286,14 +287,14 @@ fn restore_file(key: &secretbox::Key, enc_file: PathBuf, recover_path: &PathBuf)
     debug!("Creating directories for {:?}", &p);
     create_dir_all(&p).expect(&format!("Error creating src directory {:?}", p));
     debug!("Decrypting {:?}", enc_file);
-    decrypt_f2f(&key, &enc_file, &recover_path);
+    error(decrypt_f2f(&key, &enc_file, &recover_path));
 }
 
 fn clone_three<T: Clone, U: Clone, V: Clone>(t: &T, u: &U, v: &V) -> (T, U, V) {
     (t.clone(), u.clone(), v.clone())
 }
 
-fn join_path(loc: Option<&str>, p: &PathBuf) -> Result<PathBuf, ()> {
+fn join_path(loc: Option<&str>, p: &PathBuf) -> Result<PathBuf> {
     let p = match loc {
         Some(expr) => {
             let mut floc = PathBuf::from(expr);
@@ -313,4 +314,23 @@ fn join_path(loc: Option<&str>, p: &PathBuf) -> Result<PathBuf, ()> {
         None => Ok(p.to_owned()),
     };
     p
+}
+
+/// Currently ends the program. May not later.
+fn error(r: Result<()>) {
+    if let Err(ref e) = r {
+        warn!(target: "print::important", "error: {}", e);
+
+        for e in e.iter().skip(1) {
+            warn!(target: "print::important", "caused by: {}", e);
+        }
+
+        // The backtrace is not always generated. Try to run this example
+        // with `RUST_BACKTRACE=1`.
+        if let Some(backtrace) = e.backtrace() {
+            warn!(target: "print::important", "backtrace: {:?}", backtrace);
+        }
+
+        ::std::process::exit(1);
+    }
 }
