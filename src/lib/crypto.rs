@@ -2,7 +2,6 @@
 pub use rust_sodium::crypto::secretbox;
 use std::path::PathBuf;
 use super::*;
-use super::{CHUNK_SIZE, CIPHER_SIZE};
 use std::fs::{remove_file, File};
 
 /// Encrypts a file with a given key, writing output to new file

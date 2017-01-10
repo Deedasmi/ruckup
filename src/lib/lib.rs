@@ -7,7 +7,7 @@ use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 pub use std::time::UNIX_EPOCH;
 use std::collections::VecDeque;
-pub use walkdir::{WalkDir, DirEntry};
+use walkdir::DirEntry;
 use std::collections::hash_map::*;
 use chrono::{NaiveDateTime, DateTime};
 use chrono::offset::local::Local;
