@@ -18,7 +18,6 @@ use std::path::PathBuf;
 use std::fs::{File, create_dir_all};
 use std::io::{Read, Write};
 use std::time::SystemTime;
-use lib::crypto::*;
 use lib::lib::*;
 use lib::errors::*;
 use lib::walker::*;
@@ -56,11 +55,11 @@ fn main() {
     // Load key
     debug!("Loading key");
 
-    let key: secretbox::Key = prefmap.get("key".into())
+    let key: lib::crypto::secretbox::Key = prefmap.get("key".into())
         .and_then(|x| json::decode(x).ok())
         .unwrap_or_else(|| {
             warn!(target: "print::important", "No key found! Assumed intentional");
-            let k = secretbox::gen_key();
+            let k = lib::crypto::secretbox::gen_key();
             prefmap.insert("key".into(), json::encode(&k).unwrap());
             k
         });
@@ -156,7 +155,7 @@ fn main() {
             let key = key.clone();
             pool.execute(move || {
                 info!(target: "log", "Encrypting file {:?} to {}", &p, file_num);
-                unwrap(encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num)));
+                unwrap(encrypt(&key, &p, &enc_file(&temp_store, file_num)));
                 tx.send((p, entry.clone(), file_num)).unwrap();
                 debug!(target: "log", "Finished encrypting {}", file_num);
             });
@@ -248,7 +247,7 @@ fn main() {
     let mut f = File::create(&*META_LOC).expect("Failed to open meta_data for saving");
     f.write_all(&json::encode(&dir_map).expect("Failed to encode hashmap").as_bytes()).unwrap();
     debug!(target: "print", "Encrypting meta-data table...");
-    unwrap(encrypt_f2f(&key, &*META_LOC, &enc_file(&temp_store, file_num)));
+    unwrap(encrypt(&key, &*META_LOC, &enc_file(&temp_store, file_num)));
     debug!(target: "print", "Encryption complete!");
 
     // Save preferences
@@ -258,7 +257,7 @@ fn main() {
 }
 
 /// Loads the meta-data table or creates a new one
-fn get_meta_data(recover: Option<(&secretbox::Key, PathBuf)>) -> Result<MetaTable> {
+fn get_meta_data(recover: Option<(&lib::crypto::secretbox::Key, PathBuf)>) -> Result<MetaTable> {
     let mut v = Vec::new();
     let d: MetaTable = match File::open(&*META_LOC) {
         Ok(mut x) => {
@@ -270,7 +269,7 @@ fn get_meta_data(recover: Option<(&secretbox::Key, PathBuf)>) -> Result<MetaTabl
             if let Some(tuple) = recover {
                 warn!(target: "print::important", "Metadata table not found! Attempting to recover!");
                 let (k, p) = tuple;
-                let m = json::decode(&decrypt_b2s(&k, &p).chain_err(|| "Failed to decrypt meta_data table")?)
+                let m = json::decode(&decrypt_string(&k, &p).chain_err(|| "Failed to decrypt meta_data table")?)
                     .chain_err(|| "Failed to decode meta data table")?;
                 info!(target: "print::important", "Metadata table successfully recovered!");
                 m
@@ -283,13 +282,13 @@ fn get_meta_data(recover: Option<(&secretbox::Key, PathBuf)>) -> Result<MetaTabl
     Ok(d)
 }
 
-fn restore_file(key: &secretbox::Key, enc_file: PathBuf, recover_path: &PathBuf) {
+fn restore_file(key: &lib::crypto::secretbox::Key, enc_file: PathBuf, recover_path: &PathBuf) {
     let mut p = PathBuf::from(&recover_path);
     p.pop();
     debug!("Creating directories for {:?}", &p);
     create_dir_all(&p).expect(&format!("unwrap creating src directory {:?}", p));
     debug!("Decrypting {:?}", enc_file);
-    unwrap(decrypt_f2f(&key, &enc_file, &recover_path));
+    unwrap(decrypt(&key, &enc_file, &recover_path));
 }
 
 fn clone_three<T: Clone, U: Clone, V: Clone>(t: &T, u: &U, v: &V) -> (T, U, V) {

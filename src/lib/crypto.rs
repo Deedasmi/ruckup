@@ -4,12 +4,7 @@ use super::*;
 use errors::*;
 use std::io::{Read, Write};
 
-/// Encrypts a file with a given key, writing output to new file
-///
-/// # Remarkes
-/// Subject to changes. Known TODOs:
-///
-/// * Instead of taking a file name, take a proper Path object or file pointer
+/// Encrypts a object that implements Read with a given key, writing output to an object with Write
 pub fn encrypt_b2b<T: Read, U: Write>(key: &secretbox::Key, mut src: T, mut dest: U) -> Result<()> {
 
     // Get nonce
@@ -32,13 +27,7 @@ pub fn encrypt_b2b<T: Read, U: Write>(key: &secretbox::Key, mut src: T, mut dest
     Ok(())
 }
 
-/// Decrypts a given file with a given nonce and key, and saves that to a file
-///
-/// # Remarks
-/// Subject to changes. Known TODOs:
-///
-/// * Instead of reading from file, 'stream' from buffer.
-/// * Instead of taking a file name, take a proper Path object or file pointer
+/// Decrypts a given buffer with a given nonce and key, and saves that to a buffer
 pub fn decrypt_b2b<T: Read, U: Write>(key: &secretbox::Key, mut src: T, mut dest: U) -> Result<()> {
     let mut buf: Vec<u8> = Vec::new();
     src.by_ref()
@@ -63,7 +52,7 @@ pub fn decrypt_b2b<T: Read, U: Write>(key: &secretbox::Key, mut src: T, mut dest
     Ok(())
 }
 
-/// Decrypts a given file with a given key into a string
+/// Decrypts a given buffer with a given key into a string
 pub fn decrypt_b2s<T: Read>(key: &secretbox::Key, mut src: T) -> Result<String> {
     let mut buf: Vec<u8> = Vec::new();
     src.by_ref()
@@ -98,12 +87,6 @@ pub fn encrypt(plaintext: &[u8], nonce: &secretbox::Nonce, key: &secretbox::Key)
 }
 
 /// Basic wrapper for decyption.
-///
-/// # Error
-/// Panics if the decryption fails
-///
-/// # Remarks
-/// Subject to change
 pub fn decrypt(ciphertext: &[u8],
                nonce: &secretbox::Nonce,
                key: &secretbox::Key)
