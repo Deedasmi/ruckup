@@ -1,9 +1,8 @@
 //! This library will be for all crypto related functions within Ruckup.
 pub use rust_sodium::crypto::secretbox;
-use std::path::PathBuf;
 use super::*;
-use std::fs::{remove_file, File};
 use errors::*;
+use std::io::{Read, Write};
 
 /// Encrypts a file with a given key, writing output to new file
 ///
@@ -11,33 +10,24 @@ use errors::*;
 /// Subject to changes. Known TODOs:
 ///
 /// * Instead of taking a file name, take a proper Path object or file pointer
-pub fn encrypt_f2f(key: &secretbox::Key,
-                   src_filename: &PathBuf,
-                   dest_filename: &PathBuf)
-                   -> Result<()> {
-
-    remove_file(dest_filename).ok();
+pub fn encrypt_b2b<T: Read, U: Write>(key: &secretbox::Key, mut src: T, mut dest: U) -> Result<()> {
 
     // Get nonce
     let mut nonce = secretbox::gen_nonce();
-    lib::write_data(dest_filename, &nonce[..]).chain_err(|| format!("Failed adding nonce for {:?} to file",
-                        src_filename))?;
-
-    // Get file size
-    let mut r: u64 = 0;
-    let fs = lib::get_file_size(src_filename);
+    dest.write(&nonce[..])
+        .chain_err(|| "Failed to write nonce")?;
+    let mut buf: Vec<u8> = Vec::new();
 
     // Get plaintext and encrypt
-    while r * CHUNK_SIZE < fs {
-        let plaintext = lib::read_data(src_filename, r * CHUNK_SIZE, CHUNK_SIZE);
-        let ciphertext = encrypt(&plaintext[..], &nonce, &key);
+    while src.by_ref()
+        .take(CHUNK_SIZE)
+        .read_to_end(&mut buf)
+        .chain_err(|| "Failed to read from source file")? > 0 {
+        let ciphertext = encrypt(&buf[..], &nonce, &key);
         // Write cipher size instead of plaintext size
-        lib::write_data(dest_filename, &ciphertext).chain_err(|| {
-                format!("Failed writing encrypted data from {:?} to file",
-                        src_filename)
-            })?;
-        r += 1;
+        dest.write_all(ciphertext.as_slice()).chain_err(|| "Failed to write cipher to dest")?;
         nonce = nonce.increment_le();
+        buf.clear();
     }
     Ok(())
 }
@@ -49,56 +39,56 @@ pub fn encrypt_f2f(key: &secretbox::Key,
 ///
 /// * Instead of reading from file, 'stream' from buffer.
 /// * Instead of taking a file name, take a proper Path object or file pointer
-pub fn decrypt_f2f(key: &secretbox::Key,
-                   src_filename: &PathBuf,
-                   dest_filename: &PathBuf)
-                   -> Result<()> {
+pub fn decrypt_b2b<T: Read, U: Write>(key: &secretbox::Key, mut src: T, mut dest: U) -> Result<()> {
+    let mut buf: Vec<u8> = Vec::new();
+    src.by_ref()
+        .take(secretbox::NONCEBYTES as u64)
+        .read_to_end(&mut buf)
+        .chain_err(|| "Failed to read nonce")?;
 
-    // Find a better way to do this
-    remove_file(dest_filename).ok();
-
-    let mut nonce =
-        secretbox::Nonce::from_slice(&lib::read_data(src_filename, 0, secretbox::NONCEBYTES as u64)[..])
-            .expect(&format!("Bad nonce for {:?}", src_filename));
-
-    // Get file size
-    let mut r = 0;
-    let fs = lib::get_file_size(src_filename);
-    let _ = File::create(&dest_filename);
-
-    while r * CIPHER_SIZE < fs - secretbox::NONCEBYTES as u64 {
-        let ciphertext = lib::read_data(src_filename,
-                                        CIPHER_SIZE * r + secretbox::NONCEBYTES as u64,
-                                        CIPHER_SIZE);
-        let their_plaintext = decrypt(&ciphertext[..], &nonce, &key);
-        lib::write_data(dest_filename, &their_plaintext[..])
+    // TODO: Error chain this
+    // TODO: Check for nonce collision
+    let mut nonce = secretbox::Nonce::from_slice(&buf[..]).expect("Bad nonce");
+    buf.clear();
+    while src.by_ref()
+        .take(CIPHER_SIZE)
+        .read_to_end(&mut buf)
+        .chain_err(|| "Failed to read from src")? > 0 {
+        let plaintext = decrypt(&buf[..], &nonce, &key)?;
+        dest.write_all(plaintext.as_slice())
             .chain_err(|| "Failed writing decrypted text to file")?;
-        r += 1;
         nonce = nonce.increment_le();
+        buf.clear();
     }
     Ok(())
 }
 
 /// Decrypts a given file with a given key into a string
-pub fn decrypt_f2s(key: &secretbox::Key, enc_filename: &PathBuf) -> String {
-    let mut nonce =
-        secretbox::Nonce::from_slice(&lib::read_data(enc_filename, 0, secretbox::NONCEBYTES as u64)[..])
-            .expect(&format!("Bad nonce for {:?}", enc_filename));
-    let mut r = 0;
-    let fs = lib::get_file_size(enc_filename);
+pub fn decrypt_b2s<T: Read>(key: &secretbox::Key, mut src: T) -> Result<String> {
+    let mut buf: Vec<u8> = Vec::new();
+    src.by_ref()
+        .take(secretbox::NONCEBYTES as u64)
+        .read_to_end(&mut buf)
+        .chain_err(|| "Failed to read nonce from src")?;
+
+    // TODO: Error chain this
+    // TODO: Check for nonce collision
+    let mut nonce = secretbox::Nonce::from_slice(&buf[..]).expect("Bad nonce from source file");
+    buf.clear();
 
     let mut o: String = String::new();
 
-    while r * CIPHER_SIZE < fs - secretbox::NONCEBYTES as u64 {
-        let ciphertext = lib::read_data(enc_filename,
-                                        CIPHER_SIZE * r + secretbox::NONCEBYTES as u64,
-                                        CIPHER_SIZE);
-        let their_plaintext = decrypt(&ciphertext[..], &nonce, &key);
-        o += &(String::from_utf8(their_plaintext).expect("Failed to convert plaintext to String!"));
-        r += 1;
+    while src.by_ref()
+        .take(CIPHER_SIZE)
+        .read_to_end(&mut buf)
+        .chain_err(|| "Failed to read from src")? > 0 {
+        let plaintext = decrypt(&buf[..], &nonce, &key)?;
+        o +=
+            &(String::from_utf8(plaintext).chain_err(|| "Failed to convert plaintext to String!")?);
+        buf.clear();
         nonce = nonce.increment_le();
     }
-    o
+    Ok(o)
 }
 
 /// Basic wrapper for encryption
@@ -114,6 +104,13 @@ pub fn encrypt(plaintext: &[u8], nonce: &secretbox::Nonce, key: &secretbox::Key)
 ///
 /// # Remarks
 /// Subject to change
-pub fn decrypt(ciphertext: &[u8], nonce: &secretbox::Nonce, key: &secretbox::Key) -> Vec<u8> {
-    secretbox::open(&ciphertext, &nonce, &key).expect("Decryption failed!")
+pub fn decrypt(ciphertext: &[u8],
+               nonce: &secretbox::Nonce,
+               key: &secretbox::Key)
+               -> Result<Vec<u8>> {
+    // TODO: Find better way to do this.
+    match secretbox::open(&ciphertext, &nonce, &key) {
+        Ok(x) => Ok(x),
+        _ => bail!("Failed to decrypt - Likely failed authentication"),
+    }
 }

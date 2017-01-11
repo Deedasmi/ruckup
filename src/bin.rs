@@ -20,8 +20,8 @@ use std::io::{Read, Write};
 use std::time::SystemTime;
 use lib::crypto::*;
 use lib::lib::*;
-use lib::walker::*;
 use lib::errors::*;
+use lib::walker::*;
 use std::sync::Arc;
 use threadpool::ThreadPool;
 use std::sync::mpsc::channel;
@@ -122,9 +122,10 @@ fn main() {
 
     // Create hashmap
     let mut dir_map = match matches.is_present("no_recover_meta") || file_num == 0 {
-        true => get_meta_data(None),
-        false => get_meta_data(Some((&key, enc_file(&temp_store.clone(), file_num)))),
+        true => unwrap(get_meta_data(None)),
+        false => unwrap(get_meta_data(Some((&key, enc_file(&temp_store.clone(), file_num))))),
     };
+
 
     // Parse --remove
     if let Some(remdir) = matches.value_of("remove") {
@@ -155,7 +156,7 @@ fn main() {
             let key = key.clone();
             pool.execute(move || {
                 info!(target: "log", "Encrypting file {:?} to {}", &p, file_num);
-                error(encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num)));
+                unwrap(encrypt_f2f(&key, &p, &enc_file(&temp_store, file_num)));
                 tx.send((p, entry.clone(), file_num)).unwrap();
                 debug!(target: "log", "Finished encrypting {}", file_num);
             });
@@ -247,7 +248,7 @@ fn main() {
     let mut f = File::create(&*META_LOC).expect("Failed to open meta_data for saving");
     f.write_all(&json::encode(&dir_map).expect("Failed to encode hashmap").as_bytes()).unwrap();
     debug!(target: "print", "Encrypting meta-data table...");
-    error(encrypt_f2f(&key, &*META_LOC, &enc_file(&temp_store, file_num)));
+    unwrap(encrypt_f2f(&key, &*META_LOC, &enc_file(&temp_store, file_num)));
     debug!(target: "print", "Encryption complete!");
 
     // Save preferences
@@ -257,19 +258,20 @@ fn main() {
 }
 
 /// Loads the meta-data table or creates a new one
-fn get_meta_data(recover: Option<(&secretbox::Key, PathBuf)>) -> MetaTable {
+fn get_meta_data(recover: Option<(&secretbox::Key, PathBuf)>) -> Result<MetaTable> {
     let mut v = Vec::new();
     let d: MetaTable = match File::open(&*META_LOC) {
         Ok(mut x) => {
             x.read_to_end(&mut v).expect("Failed on reading meta-data file");
-            json::decode(&String::from_utf8(v).unwrap()).unwrap()
+            json::decode(&String::from_utf8(v).chain_err(|| "From_utf8 failed")?)
+                .chain_err(|| "Json decoding failed")?
         }
         Err(_) => {
             if let Some(tuple) = recover {
                 warn!(target: "print::important", "Metadata table not found! Attempting to recover!");
                 let (k, p) = tuple;
-                let m = json::decode(&decrypt_f2s(&k, &p))
-                    .expect("Failed to recover metadata table!");
+                let m = json::decode(&decrypt_b2s(&k, &p).chain_err(|| "Failed to decrypt meta_data table")?)
+                    .chain_err(|| "Failed to decode meta data table")?;
                 info!(target: "print::important", "Metadata table successfully recovered!");
                 m
             } else {
@@ -278,16 +280,16 @@ fn get_meta_data(recover: Option<(&secretbox::Key, PathBuf)>) -> MetaTable {
             }
         }
     };
-    d
+    Ok(d)
 }
 
 fn restore_file(key: &secretbox::Key, enc_file: PathBuf, recover_path: &PathBuf) {
     let mut p = PathBuf::from(&recover_path);
     p.pop();
     debug!("Creating directories for {:?}", &p);
-    create_dir_all(&p).expect(&format!("Error creating src directory {:?}", p));
+    create_dir_all(&p).expect(&format!("unwrap creating src directory {:?}", p));
     debug!("Decrypting {:?}", enc_file);
-    error(decrypt_f2f(&key, &enc_file, &recover_path));
+    unwrap(decrypt_f2f(&key, &enc_file, &recover_path));
 }
 
 fn clone_three<T: Clone, U: Clone, V: Clone>(t: &T, u: &U, v: &V) -> (T, U, V) {
@@ -317,9 +319,9 @@ fn join_path(loc: Option<&str>, p: &PathBuf) -> Result<PathBuf> {
 }
 
 /// Currently ends the program. May not later.
-fn error(r: Result<()>) {
+fn unwrap<T>(r: Result<T>) -> T {
     if let Err(ref e) = r {
-        warn!(target: "print::important", "error: {}", e);
+        warn!(target: "print::important", "Error: {}", e);
 
         for e in e.iter().skip(1) {
             warn!(target: "print::important", "caused by: {}", e);
@@ -333,4 +335,5 @@ fn error(r: Result<()>) {
 
         ::std::process::exit(1);
     }
+    r.unwrap()
 }
