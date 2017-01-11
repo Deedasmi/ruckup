@@ -1,8 +1,7 @@
 //! This is a generalized library module for use within binary and other modules
 use std;
-use std::io::prelude::*;
-use std::io::SeekFrom;
-use std::fs::{File, OpenOptions, metadata, create_dir_all, Metadata};
+use std::io::{BufReader, BufWriter};
+use std::fs::{File, OpenOptions, metadata, create_dir_all, Metadata, remove_file};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 pub use std::time::UNIX_EPOCH;
@@ -11,45 +10,14 @@ use walkdir::DirEntry;
 use std::collections::hash_map::*;
 use chrono::{NaiveDateTime, DateTime};
 use chrono::offset::local::Local;
+use errors::*;
+use super::crypto;
 
 /// Helper function to find size of file.
 pub fn get_file_size(filename: &PathBuf) -> u64 {
     metadata(filename)
         .map(|x| x.len())
         .expect(&format!("Getting file size failed! Filename: {:?}", filename))
-}
-
-/// Helper function to read chunks from a file
-///
-/// TODO:
-/// * Safely handle file operations
-pub fn read_data(filename: &PathBuf, offset: u64, limit: u64) -> Vec<u8> {
-    let mut f = File::open(filename).unwrap();
-    f.seek(SeekFrom::Start(offset)).unwrap();
-    let mut buf: Vec<u8> = Vec::new();
-    match f.take(limit).read_to_end(&mut buf) {
-        Ok(val) => {
-            debug!(target: "lib", "Successfully read {} bytes. Expexted {}", val, limit);
-        }
-        Err(err) => {
-            panic!("Error! {:?}", err);
-        }
-    }
-    buf
-}
-
-/// Helper function to append data to a file
-///
-/// TODO:
-/// * Chunk files for mid-file resumption
-/// * Safely handle file writing
-pub fn write_data(filename: &PathBuf, data: &[u8]) {
-    let mut f = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(filename)
-        .expect(&format!("Failed to open or create file {:?}", filename));
-    f.write_all(data).unwrap();
 }
 
 pub fn system_to_datetime(s: Metadata) -> DateTime<Local> {
@@ -92,7 +60,11 @@ impl FileRecord {
 
 impl std::fmt::Display for FileRecord {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: {} - {}", self.src.to_str().unwrap(), self.file_num, self.last_modified)
+        write!(f,
+               "{}: {} - {}",
+               self.src.to_str().unwrap(),
+               self.file_num,
+               self.last_modified)
     }
 }
 
@@ -195,4 +167,48 @@ impl MetaTable {
         }
         fr
     }
+}
+
+/// Encrypts a given file with a given key to a given destination
+///
+/// # Remarks
+/// Subject to change. Need to see how will work with sockets and such
+pub fn encrypt(key: &crypto::secretbox::Key, src: &PathBuf, dest: &PathBuf) -> Result<()> {
+    remove_file(&dest).ok();
+    let bsrc =
+        BufReader::new(File::open(&src).chain_err(|| format!("Failed to open file {:?}", src))?);
+    let bdest = BufWriter::new(OpenOptions::new().append(true)
+        .create(true)
+        .open(&dest)
+        .chain_err(|| format!("Failed to open or create file {:?}", dest))?);
+
+    crypto::encrypt_b2b(&key, bsrc, bdest).chain_err(|| format!("Failed to encrypt {:?}", src))?;
+    Ok(())
+}
+
+/// Decrypts a given file with a given key to a given destination
+///
+/// # Remarks
+/// Subject to change. Need to see how will work with sockets and such
+pub fn decrypt(key: &crypto::secretbox::Key, src: &PathBuf, dest: &PathBuf) -> Result<()> {
+    remove_file(&dest).ok();
+    let bsrc =
+        BufReader::new(File::open(&src).chain_err(|| format!("Failed to open file {:?}", &src))?);
+    let bdest = BufWriter::new(OpenOptions::new().append(true)
+        .create(true)
+        .open(&dest)
+        .chain_err(|| format!("Failed to open or create file {:?}", dest))?);
+
+    crypto::decrypt_b2b(&key, bsrc, bdest).chain_err(|| format!("Failed to decrypt {:?} to {:?}", src, dest))?;
+    Ok(())
+}
+
+/// Encrypts a given file with a given key to a string
+///
+/// # Remarks
+/// Subject to change. Need to see how will work with sockets and such
+pub fn decrypt_string(key: &crypto::secretbox::Key, src: &PathBuf) -> Result<String> {
+    let bsrc =
+        BufReader::new(File::open(&src).chain_err(|| format!("Failed to open file {:?}", &src))?);
+    Ok(crypto::decrypt_b2s(&key, bsrc).chain_err(|| format!("Failed to decrypt {:?} to string", src))?)
 }

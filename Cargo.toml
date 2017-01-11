@@ -17,10 +17,11 @@ rustc-serialize = "0.3"
 preferences = "0.7.2"
 app_dirs = "^1.1.1"
 clap = {version = "2.18", features = ["yaml"]}
-walkdir = "0.1.8"
+walkdir = "1.0.7"
 itertools = "0.5.5"
 log = "0.3.6"
 log4rs = "0.5.2"
 lazy_static = "0.2.1"
 threadpool = "1.0"
 chrono = { version = "0.2", features = ["rustc-serialize"] }
+error-chain = "0.7.2"
