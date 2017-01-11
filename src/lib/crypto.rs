@@ -39,6 +39,7 @@ pub fn decrypt_b2b<T: Read, U: Write>(key: &secretbox::Key, mut src: T, mut dest
     // TODO: Check for nonce collision
     let mut nonce = secretbox::Nonce::from_slice(&buf[..]).expect("Bad nonce");
     buf.clear();
+
     while src.by_ref()
         .take(CIPHER_SIZE)
         .read_to_end(&mut buf)

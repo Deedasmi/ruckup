@@ -14,10 +14,10 @@ use errors::*;
 use super::crypto;
 
 /// Helper function to find size of file.
-pub fn get_file_size(filename: &PathBuf) -> u64 {
+pub fn get_file_size(filename: &PathBuf) -> Result<u64> {
     metadata(filename)
         .map(|x| x.len())
-        .expect(&format!("Getting file size failed! Filename: {:?}", filename))
+        .chain_err(|| format!("Getting file size failed! Filename: {:?}", filename))
 }
 
 pub fn system_to_datetime(s: Metadata) -> DateTime<Local> {

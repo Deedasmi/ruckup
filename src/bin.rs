@@ -149,8 +149,8 @@ fn main() {
         let enc_files = changed_files.len();
         for entry in changed_files.into_iter() {
             let (temp_store, key, tx) = clone_three(&temp_store, &key, &tx);
-            create_enc_folder(&temp_store, file_num)
-                .expect("Unable to create temporary encrypted file!");
+            unwrap(create_enc_folder(&temp_store, file_num)
+                .chain_err(|| "Unable to create temporary encrypted file!"));
             let p = PathBuf::from(&entry.path());
             let key = key.clone();
             pool.execute(move || {
@@ -204,7 +204,7 @@ fn main() {
                 let path = join_path(prepend, &e.src).expect("Recovery path must be absolute!");
                 pool.execute(move || {
                 info!(target: "print::important", "Decrypting file {:?} to {:?}", enc_file(&temp_store, e.file_num), path);
-                restore_file(&key, enc_file(&temp_store, e.file_num), &path);
+                unwrap(restore_file(&key, enc_file(&temp_store, e.file_num), &path));
                 debug!(target: "print::important", "Finished decrypting file {}", e.file_num);
                 tx.send(path).unwrap();
             });
@@ -222,12 +222,13 @@ fn main() {
     if let Some(num) = matches.value_of("one_file") {
         if matches.is_present("overwrite") || matches.is_present("recover_to") {
             let prepend = matches.value_of("recover_to");
-            let fnum = num.parse::<u64>().expect("File number must be a positive number!");
+            let fnum = unwrap(num.parse::<u64>()
+                .chain_err(|| "File number must be a positive number!"));
             let fr = dir_map.find_record(fnum)
                 .expect(&format!("No record found with file_num {}", fnum));
             let path = join_path(prepend, &fr.src).expect("Recovery path must be absolute!");
             info!(target: "print::important", "Decrypting file {:?} to {:?}", enc_file(&temp_store, fr.file_num), path);
-            restore_file(&key, enc_file(&temp_store, fr.file_num), &path);
+            unwrap(restore_file(&key, enc_file(&temp_store, fr.file_num), &path));
             debug!(target: "print::important", "Finished decrypting file {}", fr.file_num);
         } else {
             panic!("Must specify backup location! Either -o or -r $PATH");
@@ -244,8 +245,11 @@ fn main() {
     }
 
     // Save meta data
-    let mut f = File::create(&*META_LOC).expect("Failed to open meta_data for saving");
-    f.write_all(&json::encode(&dir_map).expect("Failed to encode hashmap").as_bytes()).unwrap();
+    let mut f = unwrap(File::create(&*META_LOC)
+        .chain_err(|| "Failed to open meta_data for saving"));
+    f.write_all(unwrap(json::encode(&dir_map).chain_err(|| "Failed to encode hashmap"))
+            .as_bytes())
+        .unwrap();
     debug!(target: "print", "Encrypting meta-data table...");
     unwrap(encrypt(&key, &*META_LOC, &enc_file(&temp_store, file_num)));
     debug!(target: "print", "Encryption complete!");
@@ -261,7 +265,7 @@ fn get_meta_data(recover: Option<(&lib::crypto::secretbox::Key, PathBuf)>) -> Re
     let mut v = Vec::new();
     let d: MetaTable = match File::open(&*META_LOC) {
         Ok(mut x) => {
-            x.read_to_end(&mut v).expect("Failed on reading meta-data file");
+            x.read_to_end(&mut v).chain_err(|| "Failed on reading meta-data file")?;
             json::decode(&String::from_utf8(v).chain_err(|| "From_utf8 failed")?)
                 .chain_err(|| "Json decoding failed")?
         }
@@ -282,13 +286,17 @@ fn get_meta_data(recover: Option<(&lib::crypto::secretbox::Key, PathBuf)>) -> Re
     Ok(d)
 }
 
-fn restore_file(key: &lib::crypto::secretbox::Key, enc_file: PathBuf, recover_path: &PathBuf) {
+fn restore_file(key: &lib::crypto::secretbox::Key,
+                enc_file: PathBuf,
+                recover_path: &PathBuf)
+                -> Result<()> {
     let mut p = PathBuf::from(&recover_path);
     p.pop();
     debug!("Creating directories for {:?}", &p);
-    create_dir_all(&p).expect(&format!("unwrap creating src directory {:?}", p));
+    create_dir_all(&p).chain_err(|| format!("unwrap creating src directory {:?}", p))?;
     debug!("Decrypting {:?}", enc_file);
-    unwrap(decrypt(&key, &enc_file, &recover_path));
+    decrypt(&key, &enc_file, &recover_path)
+        .chain_err(|| format!("Failed to restore {:?}", recover_path))
 }
 
 fn clone_three<T: Clone, U: Clone, V: Clone>(t: &T, u: &U, v: &V) -> (T, U, V) {
