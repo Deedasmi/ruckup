@@ -273,7 +273,7 @@ fn get_meta_data(recover: Option<(&lib::crypto::secretbox::Key, PathBuf)>) -> Re
             if let Some(tuple) = recover {
                 warn!(target: "print::important", "Metadata table not found! Attempting to recover!");
                 let (k, p) = tuple;
-                let m = json::decode(&decrypt_string(&k, &p).chain_err(|| "Failed to decrypt meta_data table")?)
+                let m = json::decode(&decrypt_string(&k, &p).chain_err(|| "Failed to recover meta_data table")?)
                     .chain_err(|| "Failed to decode meta data table")?;
                 info!(target: "print::important", "Metadata table successfully recovered!");
                 m

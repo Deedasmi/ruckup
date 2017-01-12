@@ -92,9 +92,6 @@ pub fn decrypt(ciphertext: &[u8],
                nonce: &secretbox::Nonce,
                key: &secretbox::Key)
                -> Result<Vec<u8>> {
-    // TODO: Find better way to do this.
-    match secretbox::open(&ciphertext, &nonce, &key) {
-        Ok(x) => Ok(x),
-        _ => bail!("Failed to decrypt - Likely failed authentication"),
-    }
+    secretbox::open(&ciphertext, &nonce, &key)
+        .map_err(|_| errors::ErrorKind::DecryptionError.into())
 }

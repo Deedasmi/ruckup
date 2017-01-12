@@ -26,5 +26,12 @@ pub mod errors {
     // `error_chain!` can recurse deeply
 #![recursion_limit = "1024"]
 
-    error_chain!{}
+    error_chain!{
+        errors {
+            DecryptionError {
+                description("Decryption Error")
+                display("Failed to decrypt - Likely failed to authenticate")
+            }
+        }
+    }
 }
