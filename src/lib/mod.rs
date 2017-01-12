@@ -32,6 +32,10 @@ pub mod errors {
                 description("Decryption Error")
                 display("Failed to decrypt - Likely failed to authenticate")
             }
+            NonceError {
+                description("Bad nonce")
+                display("Failed to parse nonce")
+            }
         }
     }
 }

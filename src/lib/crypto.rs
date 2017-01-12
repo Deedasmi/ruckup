@@ -35,9 +35,8 @@ pub fn decrypt_b2b<T: Read, U: Write>(key: &secretbox::Key, mut src: T, mut dest
         .read_to_end(&mut buf)
         .chain_err(|| "Failed to read nonce")?;
 
-    // TODO: Error chain this
     // TODO: Check for nonce collision
-    let mut nonce = secretbox::Nonce::from_slice(&buf[..]).expect("Bad nonce");
+    let mut nonce = secretbox::Nonce::from_slice(&buf[..]).ok_or(ErrorKind::NonceError)?;
     buf.clear();
 
     while src.by_ref()
@@ -61,9 +60,8 @@ pub fn decrypt_b2s<T: Read>(key: &secretbox::Key, mut src: T) -> Result<String> 
         .read_to_end(&mut buf)
         .chain_err(|| "Failed to read nonce from src")?;
 
-    // TODO: Error chain this
     // TODO: Check for nonce collision
-    let mut nonce = secretbox::Nonce::from_slice(&buf[..]).expect("Bad nonce from source file");
+    let mut nonce = secretbox::Nonce::from_slice(&buf[..]).ok_or(ErrorKind::NonceError)?;
     buf.clear();
 
     let mut o: String = String::new();
@@ -92,6 +90,5 @@ pub fn decrypt(ciphertext: &[u8],
                nonce: &secretbox::Nonce,
                key: &secretbox::Key)
                -> Result<Vec<u8>> {
-    secretbox::open(&ciphertext, &nonce, &key)
-        .map_err(|_| errors::ErrorKind::DecryptionError.into())
+    secretbox::open(&ciphertext, &nonce, &key).map_err(|_| ErrorKind::DecryptionError.into())
 }
