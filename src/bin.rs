@@ -256,6 +256,8 @@ fn main() {
             .as_bytes())
         .unwrap();
     debug!(target: "print", "Encrypting meta-data table...");
+    unwrap(create_enc_folder(&temp_store, file_num)
+        .chain_err(|| "Unable to create temporary encrypted file!"));
     unwrap(encrypt(&key, &*META_LOC, &enc_file(&temp_store, file_num)));
     debug!(target: "print", "Encryption complete!");
 
