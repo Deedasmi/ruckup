@@ -156,19 +156,23 @@ fn main() {
             let key = key.clone();
             pool.execute(move || {
                 info!(target: "log", "Encrypting file {:?} to {}", &p, file_num);
-                unwrap(encrypt(&key, &p, &enc_file(&temp_store, file_num)));
-                tx.send((p, entry.clone(), file_num)).unwrap();
-                debug!(target: "log", "Finished encrypting {}", file_num);
+                if safe_unwrap(encrypt(&key, &p, &enc_file(&temp_store, file_num))) {
+                    tx.send(Some((p, entry.clone(), file_num))).unwrap();
+                    debug!(target: "log", "Finished encrypting {}", file_num);
+                } else {
+                    tx.send(None).unwrap();
+                }
             });
             file_num += 1
         }
         let mut enc: u64 = 0;
         // Take and encrypt files
         for _ in 0..enc_files {
-            let (p, e, num) = rx.recv().unwrap();
-            let p = p.to_str().unwrap().to_owned();
-            let _ = dir_map.insert(&p, &e, num);
-            debug!(target: "print::important", "Added {} to the dirmap", p);
+            if let Some((p, e, num)) = rx.recv().unwrap() {
+                let p = p.to_str().unwrap().to_owned();
+                let _ = dir_map.insert(&p, &e, num);
+                debug!(target: "print::important", "Added {} to the dirmap", p);
+            }
             enc += 1;
             if enc % 100 == 0 {
                 info!(target: "print", "{} files encrypted. {} remaining.", enc, enc_files as u64 - enc);
@@ -329,6 +333,26 @@ fn join_path(loc: Option<&str>, p: &PathBuf) -> Result<PathBuf> {
 /// Currently ends the program. May not later.
 fn unwrap<T>(r: Result<T>) -> T {
     if let Err(ref e) = r {
+        error!(target: "print::important", "Error: {}", e);
+
+        for e in e.iter().skip(1) {
+            error!(target: "print::important", "caused by: {}", e);
+        }
+
+        // The backtrace is not always generated. Try to run this example
+        // with `RUST_BACKTRACE=1`.
+        if let Some(backtrace) = e.backtrace() {
+            error!(target: "print::important", "backtrace: {:?}", backtrace);
+        }
+
+        ::std::process::exit(1);
+    }
+    r.unwrap()
+}
+
+/// TODO: Figure out a better way to do this
+fn safe_unwrap<T>(r: Result<T>) -> bool {
+    if let Err(ref e) = r {
         warn!(target: "print::important", "Error: {}", e);
 
         for e in e.iter().skip(1) {
@@ -340,8 +364,6 @@ fn unwrap<T>(r: Result<T>) -> T {
         if let Some(backtrace) = e.backtrace() {
             warn!(target: "print::important", "backtrace: {:?}", backtrace);
         }
-
-        ::std::process::exit(1);
     }
-    r.unwrap()
+    r.is_ok()
 }

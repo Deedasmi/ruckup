@@ -45,6 +45,10 @@ pub fn get_file_vector(src_locs: &Vec<PathBuf>) -> Vec<DirEntry> {
     for loc in src_locs.clone().into_iter() {
         let i = WalkDir::new(loc).into_iter();
         for f in i {
+            if f.is_err() {
+                warn!(target: "print::important", "Failed to get file pointer! {:?}", f.unwrap_err());
+                continue;
+            }
             direntrys.push(DirHash::new(f.unwrap()));
         }
     }
@@ -55,6 +59,10 @@ pub fn get_file_vector(src_locs: &Vec<PathBuf>) -> Vec<DirEntry> {
 pub fn get_changed_files(files: Vec<DirEntry>, dir_map: &lib::MetaTable) -> Vec<DirEntry> {
     let mut nv: Vec<DirEntry> = Vec::new();
     for entry in files.into_iter() {
+        if entry.metadata().is_err() {
+            warn!(target: "print::important", "Failed to get metadata information! {:?}", entry.metadata().unwrap_err());
+            continue;
+        }
         let md = entry.metadata().unwrap();
         if md.is_file() {
             let p = entry.path().to_str().expect("Unable to convert file_path to &str").to_owned();
