@@ -22,10 +22,6 @@ pub mod walker;
 pub mod errors {
     // Simple and robust error handling with error-chain!
     // Use this as a template for new projects.
-
-    // `error_chain!` can recurse deeply
-#![recursion_limit = "1024"]
-
     error_chain!{
         errors {
             DecryptionError {

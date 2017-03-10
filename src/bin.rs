@@ -37,7 +37,8 @@ lazy_static! {
 }
 
 fn main() {
-    log4rs::init_file("src/config/log_config.yml", Default::default()).unwrap();
+    log4rs::init_file("config/log_config.yml", Default::default())
+        .expect("Log configuration not found!");
     debug!("Logger loaded");
     debug!("META_LOC set {:?}", *META_LOC);
 
